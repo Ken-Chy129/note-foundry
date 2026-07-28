@@ -2,7 +2,13 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"fmt"
+)
+
+var (
+	ErrDirectoryWrongSpace = errors.New("directory parent belongs to another Knowledge Space")
+	ErrDirectoryCycle      = errors.New("directory move would create a cycle")
 )
 
 type SpaceRepository interface {
@@ -12,16 +18,26 @@ type SpaceRepository interface {
 	UpdateSpace(context.Context, *Space) error
 }
 
+type DirectoryRepository interface {
+	CreateDirectory(context.Context, *Directory) error
+	ListDirectories(context.Context, string) ([]*Directory, error)
+	GetDirectory(context.Context, string) (*Directory, error)
+	UpdateDirectory(context.Context, *Directory) error
+	WouldCreateDirectoryCycle(context.Context, string, string) (bool, error)
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
-	Spaces     SpaceRepository
-	GenerateID IDGenerator
+	Spaces      SpaceRepository
+	Directories DirectoryRepository
+	GenerateID  IDGenerator
 }
 
 type Service struct {
-	spaces     SpaceRepository
-	generateID IDGenerator
+	spaces      SpaceRepository
+	directories DirectoryRepository
+	generateID  IDGenerator
 }
 
 type SpacePage struct {
@@ -32,7 +48,86 @@ type SpacePage struct {
 }
 
 func NewService(config ServiceConfig) *Service {
-	return &Service{spaces: config.Spaces, generateID: config.GenerateID}
+	return &Service{spaces: config.Spaces, directories: config.Directories, generateID: config.GenerateID}
+}
+
+func (service *Service) CreateDirectory(ctx context.Context, spaceID, parentID, name string) (*Directory, error) {
+	if _, err := service.spaces.GetSpace(ctx, spaceID); err != nil {
+		return nil, fmt.Errorf("load directory Knowledge Space: %w", err)
+	}
+	if parentID != "" {
+		parent, err := service.directories.GetDirectory(ctx, parentID)
+		if err != nil {
+			return nil, fmt.Errorf("load parent directory: %w", err)
+		}
+		if parent.SpaceID() != spaceID {
+			return nil, ErrDirectoryWrongSpace
+		}
+	}
+
+	directory, err := NewDirectory(service.generateID(), spaceID, parentID, name)
+	if err != nil {
+		return nil, err
+	}
+	if err := service.directories.CreateDirectory(ctx, directory); err != nil {
+		return nil, fmt.Errorf("create directory: %w", err)
+	}
+	return directory, nil
+}
+
+func (service *Service) ListDirectories(ctx context.Context, spaceID string) ([]*Directory, error) {
+	if _, err := service.spaces.GetSpace(ctx, spaceID); err != nil {
+		return nil, fmt.Errorf("load directory Knowledge Space: %w", err)
+	}
+	directories, err := service.directories.ListDirectories(ctx, spaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list directories: %w", err)
+	}
+	return directories, nil
+}
+
+func (service *Service) RenameDirectory(ctx context.Context, id, name string) (*Directory, error) {
+	directory, err := service.directories.GetDirectory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load directory: %w", err)
+	}
+	if err := directory.Rename(name); err != nil {
+		return nil, err
+	}
+	if err := service.directories.UpdateDirectory(ctx, directory); err != nil {
+		return nil, fmt.Errorf("update directory: %w", err)
+	}
+	return directory, nil
+}
+
+func (service *Service) MoveDirectory(ctx context.Context, id, newParentID string) (*Directory, error) {
+	directory, err := service.directories.GetDirectory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load directory: %w", err)
+	}
+	if newParentID != "" {
+		parent, err := service.directories.GetDirectory(ctx, newParentID)
+		if err != nil {
+			return nil, fmt.Errorf("load target parent directory: %w", err)
+		}
+		if parent.SpaceID() != directory.SpaceID() {
+			return nil, ErrDirectoryWrongSpace
+		}
+		wouldCycle, err := service.directories.WouldCreateDirectoryCycle(ctx, directory.ID(), newParentID)
+		if err != nil {
+			return nil, fmt.Errorf("check directory move: %w", err)
+		}
+		if wouldCycle {
+			return nil, ErrDirectoryCycle
+		}
+	}
+	if err := directory.Move(newParentID); err != nil {
+		return nil, err
+	}
+	if err := service.directories.UpdateDirectory(ctx, directory); err != nil {
+		return nil, fmt.Errorf("move directory: %w", err)
+	}
+	return directory, nil
 }
 
 func (service *Service) CreateSpace(ctx context.Context, name string, visibility Visibility) (*Space, error) {

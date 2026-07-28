@@ -96,3 +96,58 @@ func TestPostgresRepositoryRejectsDuplicateSpaceNamesIgnoringCase(t *testing.T) 
 		t.Fatalf("duplicate CreateSpace() error = %v, want %v", err, ErrSpaceNameConflict)
 	}
 }
+
+func TestPostgresRepositoryPersistsDirectoryHierarchyAndDetectsCycles(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer pool.Close()
+	if err := database.ApplyMigrations(ctx, pool); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `TRUNCATE knowledge_spaces CASCADE`); err != nil {
+		t.Fatalf("truncate knowledge tables: %v", err)
+	}
+
+	repository := NewPostgresRepository(pool)
+	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	if err := repository.CreateSpace(ctx, space); err != nil {
+		t.Fatalf("CreateSpace() error = %v", err)
+	}
+	root, _ := NewDirectory("22222222-2222-4222-8222-222222222222", space.ID(), "", "Hermes Agent")
+	child, _ := NewDirectory("33333333-3333-4333-8333-333333333333", space.ID(), root.ID(), "Architecture")
+	if err := repository.CreateDirectory(ctx, root); err != nil {
+		t.Fatalf("create root directory: %v", err)
+	}
+	if err := repository.CreateDirectory(ctx, child); err != nil {
+		t.Fatalf("create child directory: %v", err)
+	}
+
+	directories, err := repository.ListDirectories(ctx, space.ID())
+	if err != nil {
+		t.Fatalf("ListDirectories() error = %v", err)
+	}
+	if len(directories) != 2 {
+		t.Fatalf("directory count = %d, want 2", len(directories))
+	}
+	wouldCycle, err := repository.WouldCreateDirectoryCycle(ctx, root.ID(), child.ID())
+	if err != nil {
+		t.Fatalf("WouldCreateDirectoryCycle() error = %v", err)
+	}
+	if !wouldCycle {
+		t.Error("moving root below its child was not detected as a cycle")
+	}
+
+	duplicate, _ := NewDirectory("44444444-4444-4444-8444-444444444444", space.ID(), root.ID(), "architecture")
+	if err := repository.CreateDirectory(ctx, duplicate); !errors.Is(err, ErrDirectoryNameConflict) {
+		t.Fatalf("duplicate CreateDirectory() error = %v, want %v", err, ErrDirectoryNameConflict)
+	}
+}
