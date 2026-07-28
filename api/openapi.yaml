@@ -379,6 +379,125 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/notes:
+    post:
+      operationId: createLearningNote
+      summary: Create a Learning Note draft with stable identity
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLearningNoteRequest"
+      responses:
+        "201":
+          description: Learning Note draft created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}:
+    get:
+      operationId: getLearningNote
+      summary: Get the current owner draft and Published Content snapshot
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: autosaveLearningNote
+      summary: Autosave a Learning Note draft using optimistic concurrency
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutosaveLearningNoteRequest"
+      responses:
+        "200":
+          description: Learning Note draft saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/publish:
+    post:
+      operationId: publishLearningNote
+      summary: Explicitly replace Published Content from the reviewed current draft
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishLearningNoteRequest"
+      responses:
+        "200":
+          description: Published Content replaced and a Note Revision recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -498,6 +617,13 @@ components:
         format: uuid
     TagId:
       name: tagId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NoteId:
+      name: noteId
       in: path
       required: true
       schema:
@@ -732,3 +858,109 @@ components:
             $ref: "#/components/schemas/Tag"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    PublishedContent:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - slug
+        - markdown
+        - publishedAt
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    LearningNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - directoryId
+        - title
+        - slug
+        - markdown
+        - version
+        - published
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        published:
+          oneOf:
+            - $ref: "#/components/schemas/PublishedContent"
+            - type: "null"
+    CreateLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - title
+        - markdown
+      properties:
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+    AutosaveLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+        - title
+        - markdown
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+    PublishLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1

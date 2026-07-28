@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/identity"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/knowledge"
+	"github.com/Ken-Chy129/note-foundry/backend/internal/notes"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/config"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/database"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
@@ -55,10 +56,18 @@ func main() {
 		GenerateID:  uuid.NewString,
 	})
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
+	notesRepository := notes.NewPostgresRepository(pool)
+	notesService := notes.NewService(notes.ServiceConfig{
+		Notes:      notesRepository,
+		Knowledge:  knowledgeService,
+		GenerateID: uuid.NewString,
+		Now:        time.Now,
+	})
+	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP), runtimeConfig.SecureCookies),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

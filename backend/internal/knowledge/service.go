@@ -211,3 +211,19 @@ func (service *Service) RenameSpace(ctx context.Context, id, name string) (*Spac
 	}
 	return space, nil
 }
+
+func (service *Service) GetSpace(ctx context.Context, id string) (*Space, error) {
+	space, err := service.spaces.GetSpace(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load Knowledge Space: %w", err)
+	}
+	return space, nil
+}
+
+func (service *Service) GetDirectory(ctx context.Context, id string) (*Directory, error) {
+	directory, err := service.directories.GetDirectory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load directory: %w", err)
+	}
+	return directory, nil
+}
