@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
 # Editors and operating systems
 .DS_Store
@@ -28,4 +30,3 @@ uploads/
 *.log
 tmp/
 temp/
-
