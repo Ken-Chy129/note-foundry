@@ -1,0 +1,31 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+
+# JavaScript / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Go
+bin/
+*.test
+*.out
+
+# Runtime data
+data/
+backups/
+uploads/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
