@@ -34,6 +34,9 @@ type TagRepository interface {
 	ListTags(context.Context, int, int) ([]*Tag, int, error)
 	GetTag(context.Context, string) (*Tag, error)
 	UpdateTag(context.Context, *Tag) error
+	SetNoteTags(context.Context, string, []string) error
+	ListNoteTags(context.Context, string) ([]*Tag, error)
+	MergeTag(context.Context, string, string) (*Tag, error)
 }
 
 type IDGenerator func() string
@@ -99,6 +102,42 @@ func (service *Service) RenameTag(ctx context.Context, id, name string) (*Tag, e
 	}
 	if err := service.tags.UpdateTag(ctx, tag); err != nil {
 		return nil, fmt.Errorf("update tag: %w", err)
+	}
+	return tag, nil
+}
+
+func (service *Service) SetNoteTags(ctx context.Context, noteID string, tagIDs []string) ([]*Tag, error) {
+	uniqueIDs := make([]string, 0, len(tagIDs))
+	seen := make(map[string]struct{}, len(tagIDs))
+	for _, tagID := range tagIDs {
+		if _, exists := seen[tagID]; exists {
+			continue
+		}
+		seen[tagID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, tagID)
+	}
+	if err := service.tags.SetNoteTags(ctx, noteID, uniqueIDs); err != nil {
+		return nil, fmt.Errorf("set Learning Note Tags: %w", err)
+	}
+	tags, err := service.tags.ListNoteTags(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load Learning Note Tags after update: %w", err)
+	}
+	return tags, nil
+}
+
+func (service *Service) ListNoteTags(ctx context.Context, noteID string) ([]*Tag, error) {
+	tags, err := service.tags.ListNoteTags(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("list Learning Note Tags: %w", err)
+	}
+	return tags, nil
+}
+
+func (service *Service) MergeTag(ctx context.Context, sourceID, targetID string) (*Tag, error) {
+	tag, err := service.tags.MergeTag(ctx, sourceID, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("merge Tag: %w", err)
 	}
 	return tag, nil
 }

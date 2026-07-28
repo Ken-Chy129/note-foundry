@@ -114,6 +114,27 @@ func TestServiceCreatesAndRenamesGlobalTag(t *testing.T) {
 	}
 }
 
+func TestServiceSetsDeduplicatedNoteTagsAndMergesTags(t *testing.T) {
+	tag, _ := NewTag("11111111-1111-4111-8111-111111111111", "memory")
+	tags := &tagRepositoryStub{tags: []*Tag{tag}, merged: tag}
+	service := NewService(ServiceConfig{Tags: tags, GenerateID: func() string { return "unused" }})
+
+	result, err := service.SetNoteTags(context.Background(), "22222222-2222-4222-8222-222222222222", []string{tag.ID(), tag.ID()})
+	if err != nil {
+		t.Fatalf("SetNoteTags() error = %v", err)
+	}
+	if len(tags.setTagIDs) != 1 || len(result) != 1 {
+		t.Errorf("set ids = %+v, result = %+v", tags.setTagIDs, result)
+	}
+	merged, err := service.MergeTag(context.Background(), "33333333-3333-4333-8333-333333333333", tag.ID())
+	if err != nil {
+		t.Fatalf("MergeTag() error = %v", err)
+	}
+	if merged.ID() != tag.ID() {
+		t.Errorf("merged Tag = %+v", merged)
+	}
+}
+
 func TestServiceRenamesSpaceWithoutChangingIdentity(t *testing.T) {
 	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI", VisibilityPrivate)
 	repository := &spaceRepositoryStub{found: space}
@@ -206,10 +227,12 @@ func (repository *directoryRepositoryStub) WouldCreateDirectoryCycle(context.Con
 }
 
 type tagRepositoryStub struct {
-	created *Tag
-	found   *Tag
-	updated *Tag
-	tags    []*Tag
+	created   *Tag
+	found     *Tag
+	updated   *Tag
+	tags      []*Tag
+	setTagIDs []string
+	merged    *Tag
 }
 
 func (repository *tagRepositoryStub) CreateTag(_ context.Context, tag *Tag) error {
@@ -228,4 +251,17 @@ func (repository *tagRepositoryStub) GetTag(context.Context, string) (*Tag, erro
 func (repository *tagRepositoryStub) UpdateTag(_ context.Context, tag *Tag) error {
 	repository.updated = tag
 	return nil
+}
+
+func (repository *tagRepositoryStub) SetNoteTags(_ context.Context, _ string, tagIDs []string) error {
+	repository.setTagIDs = tagIDs
+	return nil
+}
+
+func (repository *tagRepositoryStub) ListNoteTags(context.Context, string) ([]*Tag, error) {
+	return repository.tags, nil
+}
+
+func (repository *tagRepositoryStub) MergeTag(context.Context, string, string) (*Tag, error) {
+	return repository.merged, nil
 }

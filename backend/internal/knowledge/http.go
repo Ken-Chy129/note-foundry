@@ -32,6 +32,9 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.listTags)))
 	mux.Handle("POST /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.createTag)))
 	mux.Handle("PATCH /api/v1/tags/{tagId}", handler.requireOwner(http.HandlerFunc(handler.renameTag)))
+	mux.Handle("POST /api/v1/tags/{tagId}/merge", handler.requireOwner(http.HandlerFunc(handler.mergeTag)))
+	mux.Handle("GET /api/v1/notes/{noteId}/tags", handler.requireOwner(http.HandlerFunc(handler.listNoteTags)))
+	mux.Handle("PUT /api/v1/notes/{noteId}/tags", handler.requireOwner(http.HandlerFunc(handler.setNoteTags)))
 	mux.HandleFunc("GET /api/v1/public/spaces", handler.listPublicSpaces)
 	mux.HandleFunc("GET /api/v1/public/spaces/{spaceId}/directories", handler.listPublicDirectories)
 }
@@ -338,6 +341,52 @@ func (handler *HTTPHandler) renameTag(response http.ResponseWriter, request *htt
 	_ = httpapi.WriteJSON(response, http.StatusOK, toTagResponse(tag))
 }
 
+func (handler *HTTPHandler) setNoteTags(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		TagIDs []string `json:"tagIds"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	tags, err := handler.service.SetNoteTags(request.Context(), request.PathValue("noteId"), input.TagIDs)
+	if writeTagServiceError(response, err, "set Learning Note") {
+		return
+	}
+	data := make([]tagResponse, 0, len(tags))
+	for _, tag := range tags {
+		data = append(data, toTagResponse(tag))
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{"data": data})
+}
+
+func (handler *HTTPHandler) listNoteTags(response http.ResponseWriter, request *http.Request) {
+	tags, err := handler.service.ListNoteTags(request.Context(), request.PathValue("noteId"))
+	if writeTagServiceError(response, err, "list Learning Note") {
+		return
+	}
+	data := make([]tagResponse, 0, len(tags))
+	for _, tag := range tags {
+		data = append(data, toTagResponse(tag))
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{"data": data})
+}
+
+func (handler *HTTPHandler) mergeTag(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		TargetTagID string `json:"targetTagId"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	tag, err := handler.service.MergeTag(request.Context(), request.PathValue("tagId"), input.TargetTagID)
+	if writeTagServiceError(response, err, "merge") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toTagResponse(tag))
+}
+
 func toSpaceResponse(space *Space) spaceResponse {
 	return spaceResponse{ID: space.ID(), Name: space.Name(), Visibility: space.Visibility()}
 }
@@ -396,12 +445,20 @@ func writeTagServiceError(response http.ResponseWriter, err error, operation str
 		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error())
 		return true
 	}
+	if errors.Is(err, ErrTagMergeSame) {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error())
+		return true
+	}
 	if errors.Is(err, ErrTagNameConflict) {
 		httpapi.WriteError(response, http.StatusConflict, "TAG_NAME_CONFLICT", "a tag with this name already exists")
 		return true
 	}
 	if errors.Is(err, ErrTagNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "TAG_NOT_FOUND", "tag not found")
+		return true
+	}
+	if errors.Is(err, ErrTaggableNoteNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "NOTE_NOT_FOUND", "Learning Note not found")
 		return true
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" tag")

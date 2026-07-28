@@ -168,7 +168,7 @@ func TestPostgresRepositoryPersistsGlobalTags(t *testing.T) {
 	if err := database.ApplyMigrations(ctx, pool); err != nil {
 		t.Fatalf("ApplyMigrations() error = %v", err)
 	}
-	if _, err := pool.Exec(ctx, `TRUNCATE tags`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE tags CASCADE`); err != nil {
 		t.Fatalf("truncate tags: %v", err)
 	}
 
@@ -188,6 +188,46 @@ func TestPostgresRepositoryPersistsGlobalTags(t *testing.T) {
 	duplicate, _ := NewTag("22222222-2222-4222-8222-222222222222", "Memory")
 	if err := repository.CreateTag(ctx, duplicate); !errors.Is(err, ErrTagNameConflict) {
 		t.Fatalf("duplicate CreateTag() error = %v, want %v", err, ErrTagNameConflict)
+	}
+	target, _ := NewTag("33333333-3333-4333-8333-333333333333", "agent")
+	if err := repository.CreateTag(ctx, target); err != nil {
+		t.Fatalf("target CreateTag() error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO knowledge_spaces (id, name, visibility)
+		VALUES ('44444444-4444-4444-8444-444444444444', 'Tag Test', 'private');
+		INSERT INTO learning_notes (id, space_id, title, slug, current_markdown)
+		VALUES ('55555555-5555-4555-8555-555555555555', '44444444-4444-4444-8444-444444444444', 'Tagged', 'tagged', 'content');
+	`); err != nil {
+		t.Fatalf("insert tagged Learning Note: %v", err)
+	}
+	noteID := "55555555-5555-4555-8555-555555555555"
+	if err := repository.SetNoteTags(ctx, noteID, []string{tag.ID(), target.ID()}); err != nil {
+		t.Fatalf("SetNoteTags() error = %v", err)
+	}
+	noteTags, err := repository.ListNoteTags(ctx, noteID)
+	if err != nil {
+		t.Fatalf("ListNoteTags() error = %v", err)
+	}
+	if len(noteTags) != 2 {
+		t.Fatalf("note tag count = %d, want 2", len(noteTags))
+	}
+	merged, err := repository.MergeTag(ctx, tag.ID(), target.ID())
+	if err != nil {
+		t.Fatalf("MergeTag() error = %v", err)
+	}
+	if merged.ID() != target.ID() {
+		t.Errorf("merged target = %+v", merged)
+	}
+	noteTags, err = repository.ListNoteTags(ctx, noteID)
+	if err != nil {
+		t.Fatalf("ListNoteTags() after merge error = %v", err)
+	}
+	if len(noteTags) != 1 || noteTags[0].ID() != target.ID() {
+		t.Errorf("note Tags after merge = %+v", noteTags)
+	}
+	if _, err := repository.GetTag(ctx, tag.ID()); !errors.Is(err, ErrTagNotFound) {
+		t.Fatalf("source GetTag() after merge error = %v, want %v", err, ErrTagNotFound)
 	}
 }
 

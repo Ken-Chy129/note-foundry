@@ -379,6 +379,90 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/tags/{tagId}/merge:
+    post:
+      operationId: mergeTag
+      summary: Merge a global Tag into another while preserving all Note associations
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/TagId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeTagRequest"
+      responses:
+        "200":
+          description: Source Tag merged and target Tag returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/tags:
+    get:
+      operationId: listLearningNoteTags
+      summary: List global Tags attached to a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setLearningNoteTags
+      summary: Replace the complete global Tag set for a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNoteTagsRequest"
+      responses:
+        "200":
+          description: Updated Learning Note Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagDataResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/notes:
     get:
       operationId: listLearningNotes
@@ -1165,6 +1249,37 @@ components:
             $ref: "#/components/schemas/Tag"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    TagDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+    SetNoteTagsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tagIds
+      properties:
+        tagIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+    MergeTagRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - targetTagId
+      properties:
+        targetTagId:
+          type: string
+          format: uuid
     PublishedContent:
       type: object
       additionalProperties: false

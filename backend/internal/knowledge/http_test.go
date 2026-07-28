@@ -265,6 +265,29 @@ func TestHTTPHandlerListsPublicKnowledgeNavigationWithoutOwnerSession(t *testing
 	}
 }
 
+func TestHTTPHandlerSetsLearningNoteTagsAndMergesGlobalTags(t *testing.T) {
+	tag, _ := NewTag("11111111-1111-4111-8111-111111111111", "memory")
+	tags := &tagRepositoryStub{tags: []*Tag{tag}, merged: tag}
+	service := NewService(ServiceConfig{Tags: tags, GenerateID: func() string { return "unused" }})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	setRequest := httptest.NewRequest(http.MethodPut, "/api/v1/notes/22222222-2222-4222-8222-222222222222/tags", strings.NewReader(`{"tagIds":["11111111-1111-4111-8111-111111111111"]}`))
+	setResponse := httptest.NewRecorder()
+	mux.ServeHTTP(setResponse, setRequest)
+	if setResponse.Code != http.StatusOK || !strings.Contains(setResponse.Body.String(), "memory") {
+		t.Fatalf("set Note Tags response = %d %s", setResponse.Code, setResponse.Body.String())
+	}
+
+	mergeRequest := httptest.NewRequest(http.MethodPost, "/api/v1/tags/33333333-3333-4333-8333-333333333333/merge", strings.NewReader(`{"targetTagId":"11111111-1111-4111-8111-111111111111"}`))
+	mergeResponse := httptest.NewRecorder()
+	mux.ServeHTTP(mergeResponse, mergeRequest)
+	if mergeResponse.Code != http.StatusOK || !strings.Contains(mergeResponse.Body.String(), "memory") {
+		t.Fatalf("merge Tag response = %d %s", mergeResponse.Code, mergeResponse.Body.String())
+	}
+}
+
 func allowRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

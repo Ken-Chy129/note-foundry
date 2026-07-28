@@ -18,6 +18,8 @@ var (
 	ErrDirectoryParentInvalid = errors.New("directory parent does not exist in the same Knowledge Space")
 	ErrTagNameConflict        = errors.New("tag name already exists")
 	ErrTagNotFound            = errors.New("tag not found")
+	ErrTaggableNoteNotFound   = errors.New("Learning Note not found for tag association")
+	ErrTagMergeSame           = errors.New("a Tag cannot be merged into itself")
 )
 
 type PostgresRepository struct {
@@ -352,6 +354,112 @@ func (repository *PostgresRepository) UpdateTag(ctx context.Context, tag *Tag) e
 		return ErrTagNotFound
 	}
 	return nil
+}
+
+func (repository *PostgresRepository) SetNoteTags(ctx context.Context, noteID string, tagIDs []string) error {
+	transaction, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin Note Tag update: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(context.Background()) }()
+	var noteExists bool
+	if err := transaction.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM learning_notes WHERE id = $1 AND trashed_at IS NULL)`, noteID).Scan(&noteExists); err != nil {
+		return fmt.Errorf("check Learning Note for Tags: %w", err)
+	}
+	if !noteExists {
+		return ErrTaggableNoteNotFound
+	}
+	if len(tagIDs) > 0 {
+		var existingTags int
+		if err := transaction.QueryRow(ctx, `SELECT count(*) FROM tags WHERE id = ANY($1::uuid[])`, tagIDs).Scan(&existingTags); err != nil {
+			return fmt.Errorf("validate Note Tags: %w", err)
+		}
+		if existingTags != len(tagIDs) {
+			return ErrTagNotFound
+		}
+	}
+	if _, err := transaction.Exec(ctx, `DELETE FROM note_tags WHERE note_id = $1`, noteID); err != nil {
+		return fmt.Errorf("clear Note Tags: %w", err)
+	}
+	for _, tagID := range tagIDs {
+		if _, err := transaction.Exec(ctx, `INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)`, noteID, tagID); err != nil {
+			return fmt.Errorf("attach Tag to Learning Note: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Note Tag update: %w", err)
+	}
+	return nil
+}
+
+func (repository *PostgresRepository) ListNoteTags(ctx context.Context, noteID string) ([]*Tag, error) {
+	var noteExists bool
+	if err := repository.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM learning_notes WHERE id = $1 AND trashed_at IS NULL)`, noteID).Scan(&noteExists); err != nil {
+		return nil, fmt.Errorf("check Learning Note for Tags: %w", err)
+	}
+	if !noteExists {
+		return nil, ErrTaggableNoteNotFound
+	}
+	rows, err := repository.pool.Query(ctx, `
+		SELECT tags.id::text, tags.name
+		FROM note_tags
+		JOIN tags ON tags.id = note_tags.tag_id
+		WHERE note_tags.note_id = $1
+		ORDER BY lower(tags.name), tags.id
+	`, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("query Note Tags: %w", err)
+	}
+	defer rows.Close()
+	tags := make([]*Tag, 0)
+	for rows.Next() {
+		tag, err := scanTag(rows)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate Note Tags: %w", err)
+	}
+	return tags, nil
+}
+
+func (repository *PostgresRepository) MergeTag(ctx context.Context, sourceID, targetID string) (*Tag, error) {
+	if sourceID == targetID {
+		return nil, ErrTagMergeSame
+	}
+	transaction, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin Tag merge: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(context.Background()) }()
+	if _, err := scanTag(transaction.QueryRow(ctx, `SELECT id::text, name FROM tags WHERE id = $1 FOR UPDATE`, sourceID)); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTagNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("lock source Tag: %w", err)
+	}
+	target, err := scanTag(transaction.QueryRow(ctx, `SELECT id::text, name FROM tags WHERE id = $1 FOR UPDATE`, targetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTagNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lock target Tag: %w", err)
+	}
+	if _, err := transaction.Exec(ctx, `
+		INSERT INTO note_tags (note_id, tag_id)
+		SELECT note_id, $2 FROM note_tags WHERE tag_id = $1
+		ON CONFLICT DO NOTHING
+	`, sourceID, targetID); err != nil {
+		return nil, fmt.Errorf("move Note Tag associations: %w", err)
+	}
+	if _, err := transaction.Exec(ctx, `DELETE FROM tags WHERE id = $1`, sourceID); err != nil {
+		return nil, fmt.Errorf("delete merged source Tag: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit Tag merge: %w", err)
+	}
+	return target, nil
 }
 
 type rowScanner interface {
