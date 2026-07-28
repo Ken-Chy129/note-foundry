@@ -51,6 +51,7 @@ func main() {
 	knowledgeService := knowledge.NewService(knowledge.ServiceConfig{
 		Spaces:      knowledgeRepository,
 		Directories: knowledgeRepository,
+		Tags:        knowledgeRepository,
 		GenerateID:  uuid.NewString,
 	})
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)

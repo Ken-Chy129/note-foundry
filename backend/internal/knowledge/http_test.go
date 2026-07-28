@@ -193,6 +193,46 @@ func TestHTTPHandlerRejectsCyclicDirectoryMove(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerCreatesAndListsGlobalTags(t *testing.T) {
+	tags := &tagRepositoryStub{}
+	service := NewService(ServiceConfig{
+		Spaces:      &spaceRepositoryStub{},
+		Directories: &directoryRepositoryStub{},
+		Tags:        tags,
+		GenerateID:  func() string { return "11111111-1111-4111-8111-111111111111" },
+	})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/tags", strings.NewReader(`{"name":"memory"}`))
+	createResponse := httptest.NewRecorder()
+	mux.ServeHTTP(createResponse, createRequest)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d", createResponse.Code, http.StatusCreated)
+	}
+	if tags.created == nil {
+		t.Fatal("tag was not created")
+	}
+	tags.tags = []*Tag{tags.created}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/tags?page=1&pageSize=20", nil)
+	listResponse := httptest.NewRecorder()
+	mux.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d", listResponse.Code, http.StatusOK)
+	}
+	var body struct {
+		Data []tagResponse `json:"data"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&body); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(body.Data) != 1 || body.Data[0].Name != "memory" {
+		t.Errorf("tag list = %+v", body.Data)
+	}
+}
+
 func allowRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

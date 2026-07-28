@@ -29,6 +29,9 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/spaces/{spaceId}/directories", handler.requireOwner(http.HandlerFunc(handler.createDirectory)))
 	mux.Handle("PATCH /api/v1/directories/{directoryId}", handler.requireOwner(http.HandlerFunc(handler.renameDirectory)))
 	mux.Handle("POST /api/v1/directories/{directoryId}/move", handler.requireOwner(http.HandlerFunc(handler.moveDirectory)))
+	mux.Handle("GET /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.listTags)))
+	mux.Handle("POST /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.createTag)))
+	mux.Handle("PATCH /api/v1/tags/{tagId}", handler.requireOwner(http.HandlerFunc(handler.renameTag)))
 }
 
 type spaceResponse struct {
@@ -42,6 +45,11 @@ type directoryResponse struct {
 	SpaceID  string  `json:"spaceId"`
 	ParentID *string `json:"parentId"`
 	Name     string  `json:"name"`
+}
+
+type tagResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func (handler *HTTPHandler) createSpace(response http.ResponseWriter, request *http.Request) {
@@ -210,6 +218,72 @@ func (handler *HTTPHandler) moveDirectory(response http.ResponseWriter, request 
 	_ = httpapi.WriteJSON(response, http.StatusOK, toDirectoryResponse(directory))
 }
 
+func (handler *HTTPHandler) createTag(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	tag, err := handler.service.CreateTag(request.Context(), input.Name)
+	if writeTagServiceError(response, err, "create") {
+		return
+	}
+	response.Header().Set("Location", "/api/v1/tags/"+tag.ID())
+	_ = httpapi.WriteJSON(response, http.StatusCreated, toTagResponse(tag))
+}
+
+func (handler *HTTPHandler) listTags(response http.ResponseWriter, request *http.Request) {
+	page, err := paginationValue(request, "page", 1, 1, 1_000_000)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "page must be a positive integer")
+		return
+	}
+	pageSize, err := paginationValue(request, "pageSize", 50, 1, 100)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "pageSize must be between 1 and 100")
+		return
+	}
+	pageResult, err := handler.service.ListTags(request.Context(), page, pageSize)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list tags")
+		return
+	}
+	data := make([]tagResponse, 0, len(pageResult.Tags))
+	for _, tag := range pageResult.Tags {
+		data = append(data, toTagResponse(tag))
+	}
+	totalPages := 0
+	if pageResult.TotalItems > 0 {
+		totalPages = (pageResult.TotalItems + pageResult.PageSize - 1) / pageResult.PageSize
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{
+		"data": data,
+		"pagination": map[string]int{
+			"page":       pageResult.Page,
+			"pageSize":   pageResult.PageSize,
+			"totalItems": pageResult.TotalItems,
+			"totalPages": totalPages,
+		},
+	})
+}
+
+func (handler *HTTPHandler) renameTag(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	tag, err := handler.service.RenameTag(request.Context(), request.PathValue("tagId"), input.Name)
+	if writeTagServiceError(response, err, "rename") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toTagResponse(tag))
+}
+
 func toSpaceResponse(space *Space) spaceResponse {
 	return spaceResponse{ID: space.ID(), Name: space.Name(), Visibility: space.Visibility()}
 }
@@ -226,6 +300,10 @@ func toDirectoryResponse(directory *Directory) directoryResponse {
 		ParentID: parentID,
 		Name:     directory.Name(),
 	}
+}
+
+func toTagResponse(tag *Tag) tagResponse {
+	return tagResponse{ID: tag.ID(), Name: tag.Name()}
 }
 
 func writeDirectoryServiceError(response http.ResponseWriter, err error, operation string) bool {
@@ -253,6 +331,26 @@ func writeDirectoryServiceError(response http.ResponseWriter, err error, operati
 		return true
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" directory")
+	return true
+}
+
+func writeTagServiceError(response http.ResponseWriter, err error, operation string) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrTagNameRequired) {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error())
+		return true
+	}
+	if errors.Is(err, ErrTagNameConflict) {
+		httpapi.WriteError(response, http.StatusConflict, "TAG_NAME_CONFLICT", "a tag with this name already exists")
+		return true
+	}
+	if errors.Is(err, ErrTagNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "TAG_NOT_FOUND", "tag not found")
+		return true
+	}
+	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" tag")
 	return true
 }
 
