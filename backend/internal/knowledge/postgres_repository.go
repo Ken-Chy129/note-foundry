@@ -72,6 +72,36 @@ func (repository *PostgresRepository) ListSpaces(ctx context.Context, limit, off
 	return spaces, total, nil
 }
 
+func (repository *PostgresRepository) ListPublicSpaces(ctx context.Context, limit, offset int) ([]*Space, int, error) {
+	var total int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM knowledge_spaces WHERE visibility = 'public'`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count public Knowledge Spaces: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, `
+		SELECT id::text, name, visibility
+		FROM knowledge_spaces
+		WHERE visibility = 'public'
+		ORDER BY lower(name), id
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query public Knowledge Spaces: %w", err)
+	}
+	defer rows.Close()
+	spaces := make([]*Space, 0, limit)
+	for rows.Next() {
+		space, err := scanSpace(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		spaces = append(spaces, space)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate public Knowledge Spaces: %w", err)
+	}
+	return spaces, total, nil
+}
+
 func (repository *PostgresRepository) GetSpace(ctx context.Context, id string) (*Space, error) {
 	space, err := scanSpace(repository.pool.QueryRow(ctx, `
 		SELECT id::text, name, visibility
@@ -83,6 +113,21 @@ func (repository *PostgresRepository) GetSpace(ctx context.Context, id string) (
 	}
 	if err != nil {
 		return nil, err
+	}
+	return space, nil
+}
+
+func (repository *PostgresRepository) GetPublicSpace(ctx context.Context, id string) (*Space, error) {
+	space, err := scanSpace(repository.pool.QueryRow(ctx, `
+		SELECT id::text, name, visibility
+		FROM knowledge_spaces
+		WHERE id = $1 AND visibility = 'public'
+	`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrSpaceNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query public Knowledge Space: %w", err)
 	}
 	return space, nil
 }
@@ -148,6 +193,32 @@ func (repository *PostgresRepository) ListDirectories(ctx context.Context, space
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate directories: %w", err)
+	}
+	return directories, nil
+}
+
+func (repository *PostgresRepository) ListPublicDirectories(ctx context.Context, spaceID string) ([]*Directory, error) {
+	rows, err := repository.pool.Query(ctx, `
+		SELECT directories.id::text, directories.space_id::text, COALESCE(directories.parent_id::text, ''), directories.name
+		FROM directories
+		JOIN knowledge_spaces ON knowledge_spaces.id = directories.space_id
+		WHERE directories.space_id = $1 AND knowledge_spaces.visibility = 'public'
+		ORDER BY directories.parent_id NULLS FIRST, lower(directories.name), directories.id
+	`, spaceID)
+	if err != nil {
+		return nil, fmt.Errorf("query public directories: %w", err)
+	}
+	defer rows.Close()
+	directories := make([]*Directory, 0)
+	for rows.Next() {
+		directory, err := scanDirectory(rows)
+		if err != nil {
+			return nil, err
+		}
+		directories = append(directories, directory)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate public directories: %w", err)
 	}
 	return directories, nil
 }

@@ -233,6 +233,38 @@ func TestHTTPHandlerCreatesAndListsGlobalTags(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerListsPublicKnowledgeNavigationWithoutOwnerSession(t *testing.T) {
+	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	directory, _ := NewDirectory("22222222-2222-4222-8222-222222222222", space.ID(), "", "Hermes Agent")
+	service := NewService(ServiceConfig{
+		Spaces:      &spaceRepositoryStub{spaces: []*Space{space}, found: space},
+		Directories: &directoryRepositoryStub{directories: []*Directory{directory}},
+		Tags:        &tagRepositoryStub{},
+		GenerateID:  func() string { return "unused" },
+	})
+	handler := NewHTTPHandler(service, func(http.Handler) http.Handler {
+		return http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+			response.WriteHeader(http.StatusTeapot)
+		})
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	spacesRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/spaces?page=1&pageSize=20", nil)
+	spacesResponse := httptest.NewRecorder()
+	mux.ServeHTTP(spacesResponse, spacesRequest)
+	if spacesResponse.Code != http.StatusOK || !strings.Contains(spacesResponse.Body.String(), "AI Agent") {
+		t.Fatalf("public spaces response = %d %s", spacesResponse.Code, spacesResponse.Body.String())
+	}
+
+	directoriesRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/spaces/11111111-1111-4111-8111-111111111111/directories", nil)
+	directoriesResponse := httptest.NewRecorder()
+	mux.ServeHTTP(directoriesResponse, directoriesRequest)
+	if directoriesResponse.Code != http.StatusOK || !strings.Contains(directoriesResponse.Body.String(), "Hermes Agent") {
+		t.Fatalf("public directories response = %d %s", directoriesResponse.Code, directoriesResponse.Body.String())
+	}
+}
+
 func allowRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

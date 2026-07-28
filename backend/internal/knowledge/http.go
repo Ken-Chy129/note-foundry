@@ -32,6 +32,8 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.listTags)))
 	mux.Handle("POST /api/v1/tags", handler.requireOwner(http.HandlerFunc(handler.createTag)))
 	mux.Handle("PATCH /api/v1/tags/{tagId}", handler.requireOwner(http.HandlerFunc(handler.renameTag)))
+	mux.HandleFunc("GET /api/v1/public/spaces", handler.listPublicSpaces)
+	mux.HandleFunc("GET /api/v1/public/spaces/{spaceId}/directories", handler.listPublicDirectories)
 }
 
 type spaceResponse struct {
@@ -116,6 +118,41 @@ func (handler *HTTPHandler) listSpaces(response http.ResponseWriter, request *ht
 	})
 }
 
+func (handler *HTTPHandler) listPublicSpaces(response http.ResponseWriter, request *http.Request) {
+	page, err := paginationValue(request, "page", 1, 1, 1_000_000)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "page must be a positive integer")
+		return
+	}
+	pageSize, err := paginationValue(request, "pageSize", 50, 1, 100)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "pageSize must be between 1 and 100")
+		return
+	}
+	pageResult, err := handler.service.ListPublicSpaces(request.Context(), page, pageSize)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list public Knowledge Spaces")
+		return
+	}
+	data := make([]spaceResponse, 0, len(pageResult.Spaces))
+	for _, space := range pageResult.Spaces {
+		data = append(data, toSpaceResponse(space))
+	}
+	totalPages := 0
+	if pageResult.TotalItems > 0 {
+		totalPages = (pageResult.TotalItems + pageResult.PageSize - 1) / pageResult.PageSize
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{
+		"data": data,
+		"pagination": map[string]int{
+			"page":       pageResult.Page,
+			"pageSize":   pageResult.PageSize,
+			"totalItems": pageResult.TotalItems,
+			"totalPages": totalPages,
+		},
+	})
+}
+
 func (handler *HTTPHandler) renameSpace(response http.ResponseWriter, request *http.Request) {
 	var input struct {
 		Name string `json:"name"`
@@ -175,6 +212,23 @@ func (handler *HTTPHandler) listDirectories(response http.ResponseWriter, reques
 	}
 	if err != nil {
 		httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list directories")
+		return
+	}
+	data := make([]directoryResponse, 0, len(directories))
+	for _, directory := range directories {
+		data = append(data, toDirectoryResponse(directory))
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{"data": data})
+}
+
+func (handler *HTTPHandler) listPublicDirectories(response http.ResponseWriter, request *http.Request) {
+	directories, err := handler.service.ListPublicDirectories(request.Context(), request.PathValue("spaceId"))
+	if errors.Is(err, ErrSpaceNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "public Knowledge Space not found")
+		return
+	}
+	if err != nil {
+		httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list public directories")
 		return
 	}
 	data := make([]directoryResponse, 0, len(directories))

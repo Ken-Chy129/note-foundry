@@ -14,13 +14,16 @@ var (
 type SpaceRepository interface {
 	CreateSpace(context.Context, *Space) error
 	ListSpaces(context.Context, int, int) ([]*Space, int, error)
+	ListPublicSpaces(context.Context, int, int) ([]*Space, int, error)
 	GetSpace(context.Context, string) (*Space, error)
+	GetPublicSpace(context.Context, string) (*Space, error)
 	UpdateSpace(context.Context, *Space) error
 }
 
 type DirectoryRepository interface {
 	CreateDirectory(context.Context, *Directory) error
 	ListDirectories(context.Context, string) ([]*Directory, error)
+	ListPublicDirectories(context.Context, string) ([]*Directory, error)
 	GetDirectory(context.Context, string) (*Directory, error)
 	UpdateDirectory(context.Context, *Directory) error
 	WouldCreateDirectoryCycle(context.Context, string, string) (bool, error)
@@ -135,6 +138,17 @@ func (service *Service) ListDirectories(ctx context.Context, spaceID string) ([]
 	return directories, nil
 }
 
+func (service *Service) ListPublicDirectories(ctx context.Context, spaceID string) ([]*Directory, error) {
+	if _, err := service.spaces.GetPublicSpace(ctx, spaceID); err != nil {
+		return nil, fmt.Errorf("load public Knowledge Space: %w", err)
+	}
+	directories, err := service.directories.ListPublicDirectories(ctx, spaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list public directories: %w", err)
+	}
+	return directories, nil
+}
+
 func (service *Service) RenameDirectory(ctx context.Context, id, name string) (*Directory, error) {
 	directory, err := service.directories.GetDirectory(ctx, id)
 	if err != nil {
@@ -194,6 +208,14 @@ func (service *Service) ListSpaces(ctx context.Context, page, pageSize int) (Spa
 	spaces, total, err := service.spaces.ListSpaces(ctx, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return SpacePage{}, fmt.Errorf("list knowledge spaces: %w", err)
+	}
+	return SpacePage{Spaces: spaces, Page: page, PageSize: pageSize, TotalItems: total}, nil
+}
+
+func (service *Service) ListPublicSpaces(ctx context.Context, page, pageSize int) (SpacePage, error) {
+	spaces, total, err := service.spaces.ListPublicSpaces(ctx, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return SpacePage{}, fmt.Errorf("list public Knowledge Spaces: %w", err)
 	}
 	return SpacePage{Spaces: spaces, Page: page, PageSize: pageSize, TotalItems: total}, nil
 }

@@ -190,3 +190,57 @@ func TestPostgresRepositoryPersistsGlobalTags(t *testing.T) {
 		t.Fatalf("duplicate CreateTag() error = %v, want %v", err, ErrTagNameConflict)
 	}
 }
+
+func TestPostgresRepositoryPublicNavigationExcludesPrivateSpaces(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer pool.Close()
+	if err := database.ApplyMigrations(ctx, pool); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `TRUNCATE knowledge_spaces CASCADE`); err != nil {
+		t.Fatalf("truncate knowledge tables: %v", err)
+	}
+	repository := NewPostgresRepository(pool)
+	publicSpace, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	privateSpace, _ := NewSpace("22222222-2222-4222-8222-222222222222", "Private", VisibilityPrivate)
+	if err := repository.CreateSpace(ctx, publicSpace); err != nil {
+		t.Fatalf("create public space: %v", err)
+	}
+	if err := repository.CreateSpace(ctx, privateSpace); err != nil {
+		t.Fatalf("create private space: %v", err)
+	}
+	publicDirectory, _ := NewDirectory("33333333-3333-4333-8333-333333333333", publicSpace.ID(), "", "Hermes Agent")
+	privateDirectory, _ := NewDirectory("44444444-4444-4444-8444-444444444444", privateSpace.ID(), "", "Secret")
+	if err := repository.CreateDirectory(ctx, publicDirectory); err != nil {
+		t.Fatalf("create public directory: %v", err)
+	}
+	if err := repository.CreateDirectory(ctx, privateDirectory); err != nil {
+		t.Fatalf("create private directory: %v", err)
+	}
+	spaces, total, err := repository.ListPublicSpaces(ctx, 20, 0)
+	if err != nil {
+		t.Fatalf("ListPublicSpaces() error = %v", err)
+	}
+	if total != 1 || len(spaces) != 1 || spaces[0].ID() != publicSpace.ID() {
+		t.Errorf("public spaces = %+v, total = %d", spaces, total)
+	}
+	if _, err := repository.GetPublicSpace(ctx, privateSpace.ID()); !errors.Is(err, ErrSpaceNotFound) {
+		t.Fatalf("GetPublicSpace(private) error = %v, want %v", err, ErrSpaceNotFound)
+	}
+	directories, err := repository.ListPublicDirectories(ctx, publicSpace.ID())
+	if err != nil {
+		t.Fatalf("ListPublicDirectories() error = %v", err)
+	}
+	if len(directories) != 1 || directories[0].ID() != publicDirectory.ID() {
+		t.Errorf("public directories = %+v", directories)
+	}
+}

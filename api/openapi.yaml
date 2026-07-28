@@ -631,6 +631,41 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces:
+    get:
+      operationId: listPublicKnowledgeSpaces
+      summary: List Knowledge Spaces visible to anonymous readers
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated public Knowledge Spaces only.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpaceListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces/{spaceId}/directories:
+    get:
+      operationId: listPublicDirectories
+      summary: List the Directory hierarchy only for a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      responses:
+        "200":
+          description: Public navigation Directory records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/public/notes/{noteId}:
     get:
       operationId: getPublishedLearningNote

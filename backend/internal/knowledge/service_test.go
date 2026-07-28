@@ -150,7 +150,15 @@ func (repository *spaceRepositoryStub) ListSpaces(context.Context, int, int) ([]
 	return repository.spaces, len(repository.spaces), nil
 }
 
+func (repository *spaceRepositoryStub) ListPublicSpaces(context.Context, int, int) ([]*Space, int, error) {
+	return repository.spaces, len(repository.spaces), nil
+}
+
 func (repository *spaceRepositoryStub) GetSpace(context.Context, string) (*Space, error) {
+	return repository.found, nil
+}
+
+func (repository *spaceRepositoryStub) GetPublicSpace(context.Context, string) (*Space, error) {
 	return repository.found, nil
 }
 
@@ -174,6 +182,10 @@ func (repository *directoryRepositoryStub) CreateDirectory(_ context.Context, di
 }
 
 func (repository *directoryRepositoryStub) ListDirectories(context.Context, string) ([]*Directory, error) {
+	return repository.directories, nil
+}
+
+func (repository *directoryRepositoryStub) ListPublicDirectories(context.Context, string) ([]*Directory, error) {
 	return repository.directories, nil
 }
 
