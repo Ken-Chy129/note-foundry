@@ -78,6 +78,55 @@ func TestHTTPHandlerReturnsConflictForStaleAutosave(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerCreatesListsAndRestoresNoteRevision(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", space.ID(), "", "Current", "current draft")
+	target := Revision{
+		ID:        "44444444-4444-4444-8444-444444444444",
+		NoteID:    note.ID(),
+		Title:     "Earlier",
+		Slug:      "earlier",
+		Markdown:  "earlier draft",
+		Reason:    RevisionReasonPublish,
+		CreatedAt: time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC),
+	}
+	repository := &noteRepositoryStub{
+		found:        note,
+		revision:     target,
+		revisionPage: RevisionPage{Revisions: []Revision{target}, Page: 1, PageSize: 20, TotalItems: 1},
+	}
+	service := NewService(ServiceConfig{
+		Notes:      repository,
+		Knowledge:  &knowledgeCatalogStub{space: space},
+		GenerateID: idSequence("55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666"),
+		Now:        func() time.Time { return time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC) },
+	})
+	handler := NewHTTPHandler(service, allowNoteRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	checkpointRequest := httptest.NewRequest(http.MethodPost, "/api/v1/notes/33333333-3333-4333-8333-333333333333/revisions", strings.NewReader(`{"expectedVersion":1}`))
+	checkpointResponse := httptest.NewRecorder()
+	mux.ServeHTTP(checkpointResponse, checkpointRequest)
+	if checkpointResponse.Code != http.StatusCreated {
+		t.Fatalf("checkpoint response = %d %s", checkpointResponse.Code, checkpointResponse.Body.String())
+	}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/notes/33333333-3333-4333-8333-333333333333/revisions?page=1&pageSize=20", nil)
+	listResponse := httptest.NewRecorder()
+	mux.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK || !strings.Contains(listResponse.Body.String(), target.ID) {
+		t.Fatalf("list response = %d %s", listResponse.Code, listResponse.Body.String())
+	}
+
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/api/v1/notes/33333333-3333-4333-8333-333333333333/revisions/44444444-4444-4444-8444-444444444444/restore", strings.NewReader(`{"expectedVersion":1}`))
+	restoreResponse := httptest.NewRecorder()
+	mux.ServeHTTP(restoreResponse, restoreRequest)
+	if restoreResponse.Code != http.StatusOK || !strings.Contains(restoreResponse.Body.String(), "earlier draft") {
+		t.Fatalf("restore response = %d %s", restoreResponse.Code, restoreResponse.Body.String())
+	}
+}
+
 func allowNoteRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

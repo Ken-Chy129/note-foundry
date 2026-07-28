@@ -498,6 +498,97 @@ paths:
           $ref: "#/components/responses/RequestTooLarge"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/revisions:
+    get:
+      operationId: listNoteRevisions
+      summary: List private recoverable Note Revisions
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Note Revisions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteRevisionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createNoteRevisionCheckpoint
+      summary: Create a manual recoverable checkpoint of the current draft
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "201":
+          description: Manual Note Revision created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteRevision"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/revisions/{revisionId}/restore:
+    post:
+      operationId: restoreNoteRevision
+      summary: Restore a Note Revision into the current draft while preserving Published Content
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+        - $ref: "#/components/parameters/RevisionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "200":
+          description: Revision restored and the pre-restore draft checkpointed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -624,6 +715,13 @@ components:
         format: uuid
     NoteId:
       name: noteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RevisionId:
+      name: revisionId
       in: path
       required: true
       schema:
@@ -964,3 +1062,59 @@ components:
           type: integer
           format: int64
           minimum: 1
+    VersionedNoteCommandRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+    NoteRevision:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - noteId
+        - title
+        - slug
+        - markdown
+        - reason
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        noteId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        reason:
+          type: string
+          enum:
+            - publish
+            - restore
+            - manual
+        createdAt:
+          type: string
+          format: date-time
+    NoteRevisionListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoteRevision"
+        pagination:
+          $ref: "#/components/schemas/Pagination"

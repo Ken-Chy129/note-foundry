@@ -3,6 +3,7 @@ package notes
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/knowledge"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
@@ -26,6 +27,9 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.getNote)))
 	mux.Handle("PATCH /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.autosaveNote)))
 	mux.Handle("POST /api/v1/notes/{noteId}/publish", handler.requireOwner(http.HandlerFunc(handler.publishNote)))
+	mux.Handle("GET /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.listRevisions)))
+	mux.Handle("POST /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.createCheckpoint)))
+	mux.Handle("POST /api/v1/notes/{noteId}/revisions/{revisionId}/restore", handler.requireOwner(http.HandlerFunc(handler.restoreRevision)))
 }
 
 type noteResponse struct {
@@ -44,6 +48,16 @@ type publishedContentResponse struct {
 	Slug        string `json:"slug"`
 	Markdown    string `json:"markdown"`
 	PublishedAt string `json:"publishedAt"`
+}
+
+type revisionResponse struct {
+	ID        string         `json:"id"`
+	NoteID    string         `json:"noteId"`
+	Title     string         `json:"title"`
+	Slug      string         `json:"slug"`
+	Markdown  string         `json:"markdown"`
+	Reason    RevisionReason `json:"reason"`
+	CreatedAt string         `json:"createdAt"`
 }
 
 func (handler *HTTPHandler) createNote(response http.ResponseWriter, request *http.Request) {
@@ -109,6 +123,71 @@ func (handler *HTTPHandler) publishNote(response http.ResponseWriter, request *h
 	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
 }
 
+func (handler *HTTPHandler) createCheckpoint(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		ExpectedVersion int64 `json:"expectedVersion"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxNoteRequestBytes, &input); err != nil {
+		writeNoteDecodeError(response, err)
+		return
+	}
+	revision, err := handler.service.CreateCheckpoint(request.Context(), request.PathValue("noteId"), input.ExpectedVersion)
+	if writeNoteServiceError(response, err, "create Note Revision for") {
+		return
+	}
+	response.Header().Set("Location", "/api/v1/notes/"+revision.NoteID+"/revisions/"+revision.ID)
+	_ = httpapi.WriteJSON(response, http.StatusCreated, toRevisionResponse(revision))
+}
+
+func (handler *HTTPHandler) listRevisions(response http.ResponseWriter, request *http.Request) {
+	page, err := revisionPaginationValue(request, "page", 1, 1, 1_000_000)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "page must be a positive integer")
+		return
+	}
+	pageSize, err := revisionPaginationValue(request, "pageSize", 50, 1, 100)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "pageSize must be between 1 and 100")
+		return
+	}
+	pageResult, err := handler.service.ListRevisions(request.Context(), request.PathValue("noteId"), page, pageSize)
+	if writeNoteServiceError(response, err, "list revisions for") {
+		return
+	}
+	data := make([]revisionResponse, 0, len(pageResult.Revisions))
+	for _, revision := range pageResult.Revisions {
+		data = append(data, toRevisionResponse(revision))
+	}
+	totalPages := 0
+	if pageResult.TotalItems > 0 {
+		totalPages = (pageResult.TotalItems + pageResult.PageSize - 1) / pageResult.PageSize
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{
+		"data": data,
+		"pagination": map[string]int{
+			"page":       pageResult.Page,
+			"pageSize":   pageResult.PageSize,
+			"totalItems": pageResult.TotalItems,
+			"totalPages": totalPages,
+		},
+	})
+}
+
+func (handler *HTTPHandler) restoreRevision(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		ExpectedVersion int64 `json:"expectedVersion"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxNoteRequestBytes, &input); err != nil {
+		writeNoteDecodeError(response, err)
+		return
+	}
+	note, err := handler.service.Restore(request.Context(), request.PathValue("noteId"), request.PathValue("revisionId"), input.ExpectedVersion)
+	if writeNoteServiceError(response, err, "restore revision for") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
+}
+
 func toNoteResponse(note *Note) noteResponse {
 	var directoryID *string
 	if note.DirectoryID() != "" {
@@ -136,6 +215,18 @@ func toNoteResponse(note *Note) noteResponse {
 	}
 }
 
+func toRevisionResponse(revision Revision) revisionResponse {
+	return revisionResponse{
+		ID:        revision.ID,
+		NoteID:    revision.NoteID,
+		Title:     revision.Title,
+		Slug:      revision.Slug,
+		Markdown:  revision.Markdown,
+		Reason:    revision.Reason,
+		CreatedAt: revision.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
+	}
+}
+
 func writeNoteServiceError(response http.ResponseWriter, err error, operation string) bool {
 	if err == nil {
 		return false
@@ -156,6 +247,10 @@ func writeNoteServiceError(response http.ResponseWriter, err error, operation st
 		httpapi.WriteError(response, http.StatusNotFound, "NOTE_NOT_FOUND", "Learning Note not found")
 		return true
 	}
+	if errors.Is(err, ErrRevisionNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "REVISION_NOT_FOUND", "Note Revision not found")
+		return true
+	}
 	if errors.Is(err, knowledge.ErrSpaceNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "Knowledge Space not found")
 		return true
@@ -166,6 +261,18 @@ func writeNoteServiceError(response http.ResponseWriter, err error, operation st
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" Learning Note")
 	return true
+}
+
+func revisionPaginationValue(request *http.Request, key string, fallback, minimum, maximum int) (int, error) {
+	raw := request.URL.Query().Get(key)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < minimum || value > maximum {
+		return 0, errors.New("pagination value is outside the allowed range")
+	}
+	return value, nil
 }
 
 func writeNoteDecodeError(response http.ResponseWriter, err error) {

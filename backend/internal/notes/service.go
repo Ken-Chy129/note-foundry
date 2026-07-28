@@ -19,6 +19,10 @@ type Repository interface {
 	GetNote(context.Context, string) (*Note, error)
 	UpdateDraft(context.Context, *Note, int64) error
 	Publish(context.Context, *Note, Revision) error
+	CreateCheckpoint(context.Context, string, int64, Revision) error
+	ListRevisions(context.Context, string, int, int) (RevisionPage, error)
+	GetRevision(context.Context, string, string) (Revision, error)
+	Restore(context.Context, *Note, Revision, int64) error
 }
 
 type KnowledgeCatalog interface {
@@ -119,6 +123,48 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 	}
 	if err := service.notes.Publish(ctx, note, revision); err != nil {
 		return nil, fmt.Errorf("publish Learning Note: %w", err)
+	}
+	return note, nil
+}
+
+func (service *Service) CreateCheckpoint(ctx context.Context, id string, expectedVersion int64) (Revision, error) {
+	note, err := service.notes.GetNote(ctx, id)
+	if err != nil {
+		return Revision{}, fmt.Errorf("load Learning Note: %w", err)
+	}
+	revision, err := note.Checkpoint(expectedVersion, service.generateID(), RevisionReasonManual, service.now())
+	if err != nil {
+		return Revision{}, err
+	}
+	if err := service.notes.CreateCheckpoint(ctx, note.ID(), expectedVersion, revision); err != nil {
+		return Revision{}, fmt.Errorf("create Note Revision checkpoint: %w", err)
+	}
+	return revision, nil
+}
+
+func (service *Service) ListRevisions(ctx context.Context, id string, page, pageSize int) (RevisionPage, error) {
+	revisions, err := service.notes.ListRevisions(ctx, id, page, pageSize)
+	if err != nil {
+		return RevisionPage{}, fmt.Errorf("list Note Revisions: %w", err)
+	}
+	return revisions, nil
+}
+
+func (service *Service) Restore(ctx context.Context, id, revisionID string, expectedVersion int64) (*Note, error) {
+	note, err := service.notes.GetNote(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load Learning Note: %w", err)
+	}
+	target, err := service.notes.GetRevision(ctx, id, revisionID)
+	if err != nil {
+		return nil, fmt.Errorf("load Note Revision: %w", err)
+	}
+	checkpoint, err := note.Restore(expectedVersion, target, service.generateID(), service.now())
+	if err != nil {
+		return nil, err
+	}
+	if err := service.notes.Restore(ctx, note, checkpoint, expectedVersion); err != nil {
+		return nil, fmt.Errorf("restore Note Revision: %w", err)
 	}
 	return note, nil
 }

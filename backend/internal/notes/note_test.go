@@ -69,3 +69,47 @@ func TestPublishCreatesRecoverableRevisionAndPublishedSnapshot(t *testing.T) {
 		t.Errorf("Published Content = %+v", note.Published())
 	}
 }
+
+func TestRestoreMakesRevisionCurrentAndPreservesPublishedContent(t *testing.T) {
+	note, _ := NewNote("note-1", "space-1", "", "Current", "current markdown")
+	publishedAt := time.Date(2026, 7, 28, 10, 0, 0, 0, time.UTC)
+	if _, err := note.Publish("publish-revision", publishedAt); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+	target := Revision{
+		ID:       "old-revision",
+		NoteID:   note.ID(),
+		Title:    "Old title",
+		Slug:     "old-title",
+		Markdown: "old markdown",
+	}
+	restoredAt := time.Date(2026, 7, 28, 11, 0, 0, 0, time.UTC)
+	checkpoint, err := note.Restore(1, target, "restore-checkpoint", restoredAt)
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if checkpoint.Title != "Current" || checkpoint.Markdown != "current markdown" || checkpoint.Reason != RevisionReasonRestore {
+		t.Errorf("restore checkpoint = %+v", checkpoint)
+	}
+	if note.Title() != "Old title" || note.Markdown() != "old markdown" || note.Version() != 2 {
+		t.Errorf("restored note = title %q markdown %q version %d", note.Title(), note.Markdown(), note.Version())
+	}
+	if note.Published() == nil || note.Published().Title != "Current" || !note.Published().PublishedAt.Equal(publishedAt) {
+		t.Errorf("Published Content changed during restore: %+v", note.Published())
+	}
+}
+
+func TestManualCheckpointSnapshotsCurrentDraft(t *testing.T) {
+	note, _ := NewNote("note-1", "space-1", "", "Current", "current markdown")
+	now := time.Date(2026, 7, 28, 11, 0, 0, 0, time.UTC)
+	revision, err := note.Checkpoint(1, "manual-revision", RevisionReasonManual, now)
+	if err != nil {
+		t.Fatalf("Checkpoint() error = %v", err)
+	}
+	if revision.Title != note.Title() || revision.Markdown != note.Markdown() || revision.Reason != RevisionReasonManual {
+		t.Errorf("revision = %+v", revision)
+	}
+	if note.Version() != 1 {
+		t.Errorf("version = %d, want unchanged", note.Version())
+	}
+}

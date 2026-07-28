@@ -89,6 +89,47 @@ func TestServiceRejectsPublishingPrivateNote(t *testing.T) {
 	}
 }
 
+func TestServiceCreatesListsAndRestoresNoteRevisions(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", space.ID(), "", "Current", "current draft")
+	target := Revision{
+		ID:        "44444444-4444-4444-8444-444444444444",
+		NoteID:    note.ID(),
+		Title:     "Earlier",
+		Slug:      "earlier",
+		Markdown:  "earlier draft",
+		Reason:    RevisionReasonPublish,
+		CreatedAt: time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC),
+	}
+	repository := &noteRepositoryStub{found: note, revision: target, revisionPage: RevisionPage{Revisions: []Revision{target}, Page: 1, PageSize: 20, TotalItems: 1}}
+	now := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	service := NewService(ServiceConfig{
+		Notes:      repository,
+		Knowledge:  &knowledgeCatalogStub{space: space},
+		GenerateID: idSequence("55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666"),
+		Now:        func() time.Time { return now },
+	})
+
+	manual, err := service.CreateCheckpoint(context.Background(), note.ID(), 1)
+	if err != nil {
+		t.Fatalf("CreateCheckpoint() error = %v", err)
+	}
+	if manual.Reason != RevisionReasonManual || repository.checkpoint.ID != manual.ID {
+		t.Errorf("manual checkpoint = %+v, persisted = %+v", manual, repository.checkpoint)
+	}
+	page, err := service.ListRevisions(context.Background(), note.ID(), 1, 20)
+	if err != nil || page.TotalItems != 1 {
+		t.Fatalf("ListRevisions() = %+v, %v", page, err)
+	}
+	restored, err := service.Restore(context.Background(), note.ID(), target.ID, 1)
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if restored.Markdown() != "earlier draft" || restored.Version() != 2 || repository.restoreCheckpoint.Reason != RevisionReasonRestore {
+		t.Errorf("restored = %+v, checkpoint = %+v", restored, repository.restoreCheckpoint)
+	}
+}
+
 type noteRepositoryStub struct {
 	created                *Note
 	found                  *Note
@@ -96,6 +137,11 @@ type noteRepositoryStub struct {
 	updatedExpectedVersion int64
 	published              *Note
 	publishedRevision      Revision
+	checkpoint             Revision
+	revision               Revision
+	revisionPage           RevisionPage
+	restored               *Note
+	restoreCheckpoint      Revision
 }
 
 func (repository *noteRepositoryStub) CreateNote(_ context.Context, note *Note) error {
@@ -116,6 +162,25 @@ func (repository *noteRepositoryStub) UpdateDraft(_ context.Context, note *Note,
 func (repository *noteRepositoryStub) Publish(_ context.Context, note *Note, revision Revision) error {
 	repository.published = note
 	repository.publishedRevision = revision
+	return nil
+}
+
+func (repository *noteRepositoryStub) CreateCheckpoint(_ context.Context, _ string, _ int64, revision Revision) error {
+	repository.checkpoint = revision
+	return nil
+}
+
+func (repository *noteRepositoryStub) ListRevisions(context.Context, string, int, int) (RevisionPage, error) {
+	return repository.revisionPage, nil
+}
+
+func (repository *noteRepositoryStub) GetRevision(context.Context, string, string) (Revision, error) {
+	return repository.revision, nil
+}
+
+func (repository *noteRepositoryStub) Restore(_ context.Context, note *Note, checkpoint Revision, _ int64) error {
+	repository.restored = note
+	repository.restoreCheckpoint = checkpoint
 	return nil
 }
 

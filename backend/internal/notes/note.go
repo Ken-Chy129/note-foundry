@@ -12,6 +12,7 @@ var (
 	ErrNoteSpaceIDRequired = errors.New("Learning Note Knowledge Space id is required")
 	ErrNoteTitleRequired   = errors.New("Learning Note title is required")
 	ErrRevisionIDRequired  = errors.New("Note Revision id is required")
+	ErrRevisionWrongNote   = errors.New("Note Revision belongs to another Learning Note")
 	ErrVersionConflict     = errors.New("Learning Note was changed by another save")
 )
 
@@ -123,18 +124,9 @@ func (note *Note) Autosave(expectedVersion int64, title, markdown string) error 
 }
 
 func (note *Note) Publish(revisionID string, now time.Time) (Revision, error) {
-	revisionID = strings.TrimSpace(revisionID)
-	if revisionID == "" {
-		return Revision{}, ErrRevisionIDRequired
-	}
-	revision := Revision{
-		ID:        revisionID,
-		NoteID:    note.id,
-		Title:     note.title,
-		Slug:      note.slug,
-		Markdown:  note.markdown,
-		Reason:    RevisionReasonPublish,
-		CreatedAt: now,
+	revision, err := note.Checkpoint(note.version, revisionID, RevisionReasonPublish, now)
+	if err != nil {
+		return Revision{}, err
 	}
 	note.published = &PublishedContent{
 		Title:       note.title,
@@ -143,6 +135,40 @@ func (note *Note) Publish(revisionID string, now time.Time) (Revision, error) {
 		PublishedAt: now,
 	}
 	return revision, nil
+}
+
+func (note *Note) Checkpoint(expectedVersion int64, revisionID string, reason RevisionReason, now time.Time) (Revision, error) {
+	if expectedVersion != note.version {
+		return Revision{}, ErrVersionConflict
+	}
+	revisionID = strings.TrimSpace(revisionID)
+	if revisionID == "" {
+		return Revision{}, ErrRevisionIDRequired
+	}
+	return Revision{
+		ID:        revisionID,
+		NoteID:    note.id,
+		Title:     note.title,
+		Slug:      note.slug,
+		Markdown:  note.markdown,
+		Reason:    reason,
+		CreatedAt: now,
+	}, nil
+}
+
+func (note *Note) Restore(expectedVersion int64, target Revision, checkpointID string, now time.Time) (Revision, error) {
+	checkpoint, err := note.Checkpoint(expectedVersion, checkpointID, RevisionReasonRestore, now)
+	if err != nil {
+		return Revision{}, err
+	}
+	if target.NoteID != note.id {
+		return Revision{}, ErrRevisionWrongNote
+	}
+	note.title = target.Title
+	note.slug = target.Slug
+	note.markdown = target.Markdown
+	note.version++
+	return checkpoint, nil
 }
 
 func slugify(title string) string {

@@ -97,4 +97,46 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if revisionCount != 1 {
 		t.Errorf("revision count = %d, want 1", revisionCount)
 	}
+
+	manualRevision, err := firstCopy.Checkpoint(2, "55555555-5555-4555-8555-555555555555", RevisionReasonManual, publishAt.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("Checkpoint() error = %v", err)
+	}
+	if err := repository.CreateCheckpoint(ctx, firstCopy.ID(), 2, manualRevision); err != nil {
+		t.Fatalf("CreateCheckpoint() error = %v", err)
+	}
+	if err := firstCopy.Autosave(2, "Agent Loop revised", "regressed draft"); err != nil {
+		t.Fatalf("second Autosave() error = %v", err)
+	}
+	if err := repository.UpdateDraft(ctx, firstCopy, 2); err != nil {
+		t.Fatalf("second UpdateDraft() error = %v", err)
+	}
+	target, err := repository.GetRevision(ctx, firstCopy.ID(), revision.ID)
+	if err != nil {
+		t.Fatalf("GetRevision() error = %v", err)
+	}
+	checkpoint, err := firstCopy.Restore(3, target, "66666666-6666-4666-8666-666666666666", publishAt.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if err := repository.Restore(ctx, firstCopy, checkpoint, 3); err != nil {
+		t.Fatalf("repository.Restore() error = %v", err)
+	}
+	restored, err := repository.GetNote(ctx, firstCopy.ID())
+	if err != nil {
+		t.Fatalf("restored GetNote() error = %v", err)
+	}
+	if restored.Markdown() != "complete draft" || restored.Version() != 4 {
+		t.Errorf("restored note = markdown %q version %d", restored.Markdown(), restored.Version())
+	}
+	if restored.Published() == nil || restored.Published().Markdown != "complete draft" {
+		t.Errorf("Published Content changed during restore: %+v", restored.Published())
+	}
+	page, err := repository.ListRevisions(ctx, firstCopy.ID(), 1, 20)
+	if err != nil {
+		t.Fatalf("ListRevisions() error = %v", err)
+	}
+	if page.TotalItems != 3 || len(page.Revisions) != 3 || page.Revisions[0].Reason != RevisionReasonRestore {
+		t.Errorf("revision page = %+v", page)
+	}
 }
