@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/identity"
+	"github.com/Ken-Chy129/note-foundry/backend/internal/knowledge"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/config"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/database"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -45,10 +47,16 @@ func main() {
 		PostLoginPath:     "/app",
 		TrustForwardedFor: runtimeConfig.Environment == config.EnvironmentProduction,
 	})
+	knowledgeRepository := knowledge.NewPostgresRepository(pool)
+	knowledgeService := knowledge.NewService(knowledge.ServiceConfig{
+		Spaces:     knowledgeRepository,
+		GenerateID: uuid.NewString,
+	})
+	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP), runtimeConfig.SecureCookies),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -66,7 +74,7 @@ type routeRegistrar interface {
 	RegisterRoutes(*http.ServeMux)
 }
 
-func newHandler(readiness readinessChecker, routes routeRegistrar) http.Handler {
+func newHandler(readiness readinessChecker, routes ...routeRegistrar) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(response http.ResponseWriter, _ *http.Request) {
 		_ = httpapi.WriteJSON(response, http.StatusOK, map[string]string{"status": "ok"})
@@ -81,8 +89,10 @@ func newHandler(readiness readinessChecker, routes routeRegistrar) http.Handler 
 		}
 		_ = httpapi.WriteJSON(response, http.StatusOK, map[string]string{"status": "ready"})
 	})
-	if routes != nil {
-		routes.RegisterRoutes(mux)
+	for _, registrar := range routes {
+		if registrar != nil {
+			registrar.RegisterRoutes(mux)
+		}
 	}
 	return mux
 }

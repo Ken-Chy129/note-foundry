@@ -80,6 +80,93 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/spaces:
+    get:
+      operationId: listKnowledgeSpaces
+      summary: List Knowledge Spaces for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Knowledge Spaces.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpaceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createKnowledgeSpace
+      summary: Create a flat top-level Knowledge Space
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKnowledgeSpaceRequest"
+      responses:
+        "201":
+          description: Knowledge Space created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpace"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/spaces/{spaceId}:
+    patch:
+      operationId: renameKnowledgeSpace
+      summary: Rename a Knowledge Space without changing its identity
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameKnowledgeSpaceRequest"
+      responses:
+        "200":
+          description: Knowledge Space renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpace"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -133,6 +220,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RequestTooLarge:
+      description: The request body exceeds the allowed size.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     InternalError:
       description: An internal error occurred without exposing implementation details.
       content:
@@ -149,6 +254,29 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    SpaceId:
+      name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     StatusResponse:
       type: object
@@ -203,3 +331,76 @@ components:
         expiresAt:
           type: string
           format: date-time
+    KnowledgeSpace:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - visibility
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+    CreateKnowledgeSpaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - visibility
+      properties:
+        name:
+          type: string
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+    RenameKnowledgeSpaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    Pagination:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - pageSize
+        - totalItems
+        - totalPages
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    KnowledgeSpaceListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeSpace"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
