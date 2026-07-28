@@ -8,10 +8,15 @@
 
 ## 本地开发
 
-需要 Go 1.24 或更高版本。
+需要 Go 1.25 或更高版本，以及可运行 Docker Compose 的 Docker 环境。
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres
+
 cd backend
+export DATABASE_URL='postgres://notefoundry:replace-this-local-password@localhost:54329/notefoundry?sslmode=disable'
+go run ./cmd/migrate
 go test ./...
 go run ./cmd/api
 ```
