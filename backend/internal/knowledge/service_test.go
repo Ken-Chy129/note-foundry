@@ -117,7 +117,8 @@ func TestServiceCreatesAndRenamesGlobalTag(t *testing.T) {
 func TestServiceSetsDeduplicatedNoteTagsAndMergesTags(t *testing.T) {
 	tag, _ := NewTag("11111111-1111-4111-8111-111111111111", "memory")
 	tags := &tagRepositoryStub{tags: []*Tag{tag}, merged: tag}
-	service := NewService(ServiceConfig{Tags: tags, GenerateID: func() string { return "unused" }})
+	search := &tagSearchProjectorStub{}
+	service := NewService(ServiceConfig{Tags: tags, GenerateID: func() string { return "unused" }, Search: search})
 
 	result, err := service.SetNoteTags(context.Background(), "22222222-2222-4222-8222-222222222222", []string{tag.ID(), tag.ID()})
 	if err != nil {
@@ -126,12 +127,18 @@ func TestServiceSetsDeduplicatedNoteTagsAndMergesTags(t *testing.T) {
 	if len(tags.setTagIDs) != 1 || len(result) != 1 {
 		t.Errorf("set ids = %+v, result = %+v", tags.setTagIDs, result)
 	}
+	if search.refreshedNoteID == "" {
+		t.Error("Note Tag search projection was not refreshed")
+	}
 	merged, err := service.MergeTag(context.Background(), "33333333-3333-4333-8333-333333333333", tag.ID())
 	if err != nil {
 		t.Fatalf("MergeTag() error = %v", err)
 	}
 	if merged.ID() != tag.ID() {
 		t.Errorf("merged Tag = %+v", merged)
+	}
+	if search.refreshedTagID != tag.ID() {
+		t.Errorf("refreshed Tag id = %q", search.refreshedTagID)
 	}
 }
 
@@ -288,6 +295,21 @@ func (repository *tagRepositoryStub) MergeTag(context.Context, string, string) (
 
 type noteLinkRepositoryStub struct {
 	links []LinkedNote
+}
+
+type tagSearchProjectorStub struct {
+	refreshedNoteID string
+	refreshedTagID  string
+}
+
+func (projector *tagSearchProjectorStub) RefreshNoteTags(_ context.Context, noteID string) error {
+	projector.refreshedNoteID = noteID
+	return nil
+}
+
+func (projector *tagSearchProjectorStub) RefreshNotesForTag(_ context.Context, tagID string) error {
+	projector.refreshedTagID = tagID
+	return nil
 }
 
 func (repository *noteLinkRepositoryStub) ReplaceCurrentNoteLinks(context.Context, string, []string) error {

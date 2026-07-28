@@ -48,6 +48,11 @@ type NoteLinkRepository interface {
 	ListPublishedBacklinks(context.Context, string) ([]LinkedNote, error)
 }
 
+type TagSearchProjector interface {
+	RefreshNoteTags(context.Context, string) error
+	RefreshNotesForTag(context.Context, string) error
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
@@ -56,6 +61,7 @@ type ServiceConfig struct {
 	Tags        TagRepository
 	GenerateID  IDGenerator
 	Links       NoteLinkRepository
+	Search      TagSearchProjector
 }
 
 type Service struct {
@@ -64,6 +70,7 @@ type Service struct {
 	tags        TagRepository
 	generateID  IDGenerator
 	links       NoteLinkRepository
+	search      TagSearchProjector
 }
 
 type SpacePage struct {
@@ -81,7 +88,7 @@ type TagPage struct {
 }
 
 func NewService(config ServiceConfig) *Service {
-	return &Service{spaces: config.Spaces, directories: config.Directories, tags: config.Tags, generateID: config.GenerateID, links: config.Links}
+	return &Service{spaces: config.Spaces, directories: config.Directories, tags: config.Tags, generateID: config.GenerateID, links: config.Links, search: config.Search}
 }
 
 func (service *Service) ReplaceCurrentNoteLinks(ctx context.Context, sourceID string, targetIDs []string) error {
@@ -152,6 +159,11 @@ func (service *Service) RenameTag(ctx context.Context, id, name string) (*Tag, e
 	if err := service.tags.UpdateTag(ctx, tag); err != nil {
 		return nil, fmt.Errorf("update tag: %w", err)
 	}
+	if service.search != nil {
+		if err := service.search.RefreshNotesForTag(ctx, tag.ID()); err != nil {
+			return nil, fmt.Errorf("refresh search after Tag rename: %w", err)
+		}
+	}
 	return tag, nil
 }
 
@@ -167,6 +179,11 @@ func (service *Service) SetNoteTags(ctx context.Context, noteID string, tagIDs [
 	}
 	if err := service.tags.SetNoteTags(ctx, noteID, uniqueIDs); err != nil {
 		return nil, fmt.Errorf("set Learning Note Tags: %w", err)
+	}
+	if service.search != nil {
+		if err := service.search.RefreshNoteTags(ctx, noteID); err != nil {
+			return nil, fmt.Errorf("refresh search after setting Learning Note Tags: %w", err)
+		}
 	}
 	tags, err := service.tags.ListNoteTags(ctx, noteID)
 	if err != nil {
@@ -187,6 +204,11 @@ func (service *Service) MergeTag(ctx context.Context, sourceID, targetID string)
 	tag, err := service.tags.MergeTag(ctx, sourceID, targetID)
 	if err != nil {
 		return nil, fmt.Errorf("merge Tag: %w", err)
+	}
+	if service.search != nil {
+		if err := service.search.RefreshNotesForTag(ctx, tag.ID()); err != nil {
+			return nil, fmt.Errorf("refresh search after Tag merge: %w", err)
+		}
 	}
 	return tag, nil
 }

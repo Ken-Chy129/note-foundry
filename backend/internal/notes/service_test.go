@@ -199,12 +199,14 @@ func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing
 	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
 	repository := &noteRepositoryStub{}
 	projector := &linkProjectorStub{}
+	searchProjector := &searchProjectorStub{}
 	service := NewService(ServiceConfig{
 		Notes:      repository,
 		Knowledge:  &knowledgeCatalogStub{space: space},
 		GenerateID: idSequence("33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"),
 		Now:        time.Now,
 		Links:      projector,
+		Search:     searchProjector,
 	})
 	note, err := service.CreateNote(context.Background(), space.ID(), "", "Agent Loop", `[Memory](note:22222222-2222-4222-8222-222222222222)`)
 	if err != nil {
@@ -213,12 +215,18 @@ func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing
 	if len(projector.currentTargets) != 1 || projector.currentTargets[0] != "22222222-2222-4222-8222-222222222222" {
 		t.Errorf("current targets = %+v", projector.currentTargets)
 	}
+	if searchProjector.currentMarkdown != note.Markdown() {
+		t.Errorf("current search Markdown = %q", searchProjector.currentMarkdown)
+	}
 	repository.found = note
 	if _, err := service.Publish(context.Background(), note.ID(), 1); err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
 	if len(projector.publishedTargets) != 1 || projector.publishedTargets[0] != projector.currentTargets[0] {
 		t.Errorf("published targets = %+v", projector.publishedTargets)
+	}
+	if searchProjector.publishedMarkdown != note.Published().Markdown {
+		t.Errorf("published search Markdown = %q", searchProjector.publishedMarkdown)
 	}
 }
 
@@ -329,6 +337,21 @@ type knowledgeCatalogStub struct {
 type linkProjectorStub struct {
 	currentTargets   []string
 	publishedTargets []string
+}
+
+type searchProjectorStub struct {
+	currentMarkdown   string
+	publishedMarkdown string
+}
+
+func (projector *searchProjectorStub) ProjectCurrentNote(_ context.Context, _, _, markdown string) error {
+	projector.currentMarkdown = markdown
+	return nil
+}
+
+func (projector *searchProjectorStub) ProjectPublishedNote(_ context.Context, _, _, markdown string) error {
+	projector.publishedMarkdown = markdown
+	return nil
 }
 
 func (projector *linkProjectorStub) ReplaceCurrentNoteLinks(_ context.Context, _ string, targets []string) error {

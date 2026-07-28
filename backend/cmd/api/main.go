@@ -13,6 +13,7 @@ import (
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/config"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/database"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
+	searchmodule "github.com/Ken-Chy129/note-foundry/backend/internal/search"
 	"github.com/google/uuid"
 )
 
@@ -49,11 +50,15 @@ func main() {
 		TrustForwardedFor: runtimeConfig.Environment == config.EnvironmentProduction,
 	})
 	knowledgeRepository := knowledge.NewPostgresRepository(pool)
+	searchRepository := searchmodule.NewPostgresRepository(pool)
+	searchService := searchmodule.NewService(searchRepository)
+	searchHTTP := searchmodule.NewHTTPHandler(searchService, identityHTTP.RequireOwner)
 	knowledgeService := knowledge.NewService(knowledge.ServiceConfig{
 		Spaces:      knowledgeRepository,
 		Directories: knowledgeRepository,
 		Tags:        knowledgeRepository,
 		Links:       knowledgeRepository,
+		Search:      searchService,
 		GenerateID:  uuid.NewString,
 	})
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
@@ -64,12 +69,13 @@ func main() {
 		GenerateID: uuid.NewString,
 		Now:        time.Now,
 		Links:      knowledgeService,
+		Search:     searchService,
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP), runtimeConfig.SecureCookies),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP, searchHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

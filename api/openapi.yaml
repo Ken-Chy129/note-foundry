@@ -946,6 +946,52 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/search:
+    get:
+      operationId: searchOwnerLearningNotes
+      summary: Search all owner-visible current Learning Note content
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/TagIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/SearchPageSize"
+      responses:
+        "200":
+          description: Ranked current Learning Note search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/search:
+    get:
+      operationId: searchPublishedLearningNotes
+      summary: Search only Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/TagIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/SearchPageSize"
+      responses:
+        "200":
+          description: Ranked public Published Content search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -1068,6 +1114,27 @@ components:
       schema:
         type: string
         format: uuid
+    TagIdQuery:
+      name: tagId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    SearchQuery:
+      name: q
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SearchPageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
     DirectoryId:
       name: directoryId
       in: path
@@ -1501,6 +1568,45 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LinkedNote"
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - title
+        - slug
+        - snippet
+        - rank
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        snippet:
+          type: string
+        rank:
+          type: number
+          format: double
+    SearchResultListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
     CreateLearningNoteRequest:
       type: object
       additionalProperties: false

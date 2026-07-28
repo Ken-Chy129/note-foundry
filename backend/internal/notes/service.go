@@ -43,6 +43,11 @@ type LinkProjector interface {
 	ReplacePublishedNoteLinks(context.Context, string, []string) error
 }
 
+type SearchProjector interface {
+	ProjectCurrentNote(context.Context, string, string, string) error
+	ProjectPublishedNote(context.Context, string, string, string) error
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
@@ -51,6 +56,7 @@ type ServiceConfig struct {
 	GenerateID IDGenerator
 	Now        func() time.Time
 	Links      LinkProjector
+	Search     SearchProjector
 }
 
 type Service struct {
@@ -59,6 +65,7 @@ type Service struct {
 	generateID IDGenerator
 	now        func() time.Time
 	links      LinkProjector
+	search     SearchProjector
 }
 
 type RestoreTrashInput struct {
@@ -75,6 +82,7 @@ func NewService(config ServiceConfig) *Service {
 		generateID: config.GenerateID,
 		now:        config.Now,
 		links:      config.Links,
+		search:     config.Search,
 	}
 }
 
@@ -100,6 +108,9 @@ func (service *Service) CreateNote(ctx context.Context, spaceID, directoryID, ti
 		return nil, fmt.Errorf("create Learning Note: %w", err)
 	}
 	if err := service.replaceCurrentLinks(ctx, note); err != nil {
+		return nil, err
+	}
+	if err := service.projectCurrentSearch(ctx, note); err != nil {
 		return nil, err
 	}
 	return note, nil
@@ -151,6 +162,9 @@ func (service *Service) Autosave(ctx context.Context, id string, expectedVersion
 	if err := service.replaceCurrentLinks(ctx, note); err != nil {
 		return nil, err
 	}
+	if err := service.projectCurrentSearch(ctx, note); err != nil {
+		return nil, err
+	}
 	return note, nil
 }
 
@@ -178,6 +192,9 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 		return nil, fmt.Errorf("publish Learning Note: %w", err)
 	}
 	if err := service.replacePublishedLinks(ctx, note); err != nil {
+		return nil, err
+	}
+	if err := service.projectPublishedSearch(ctx, note); err != nil {
 		return nil, err
 	}
 	return note, nil
@@ -223,6 +240,9 @@ func (service *Service) Restore(ctx context.Context, id, revisionID string, expe
 		return nil, fmt.Errorf("restore Note Revision: %w", err)
 	}
 	if err := service.replaceCurrentLinks(ctx, note); err != nil {
+		return nil, err
+	}
+	if err := service.projectCurrentSearch(ctx, note); err != nil {
 		return nil, err
 	}
 	return note, nil
@@ -299,6 +319,14 @@ func (service *Service) RestoreFromTrash(ctx context.Context, id string, input R
 			return nil, err
 		}
 	}
+	if err := service.projectCurrentSearch(ctx, entry.Note); err != nil {
+		return nil, err
+	}
+	if revision != nil {
+		if err := service.projectPublishedSearch(ctx, entry.Note); err != nil {
+			return nil, err
+		}
+	}
 	return entry.Note, nil
 }
 
@@ -325,6 +353,26 @@ func (service *Service) replacePublishedLinks(ctx context.Context, note *Note) e
 	}
 	if err := service.links.ReplacePublishedNoteLinks(ctx, note.ID(), ExtractNoteLinkTargets(note.Published().Markdown)); err != nil {
 		return fmt.Errorf("project published Note Links: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) projectCurrentSearch(ctx context.Context, note *Note) error {
+	if service.search == nil {
+		return nil
+	}
+	if err := service.search.ProjectCurrentNote(ctx, note.ID(), note.Title(), note.Markdown()); err != nil {
+		return fmt.Errorf("project current Learning Note search: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) projectPublishedSearch(ctx context.Context, note *Note) error {
+	if service.search == nil || note.Published() == nil {
+		return nil
+	}
+	if err := service.search.ProjectPublishedNote(ctx, note.ID(), note.Published().Title, note.Published().Markdown); err != nil {
+		return fmt.Errorf("project published Learning Note search: %w", err)
 	}
 	return nil
 }
