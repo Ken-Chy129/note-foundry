@@ -25,12 +25,23 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/spaces", handler.requireOwner(http.HandlerFunc(handler.listSpaces)))
 	mux.Handle("POST /api/v1/spaces", handler.requireOwner(http.HandlerFunc(handler.createSpace)))
 	mux.Handle("PATCH /api/v1/spaces/{spaceId}", handler.requireOwner(http.HandlerFunc(handler.renameSpace)))
+	mux.Handle("GET /api/v1/spaces/{spaceId}/directories", handler.requireOwner(http.HandlerFunc(handler.listDirectories)))
+	mux.Handle("POST /api/v1/spaces/{spaceId}/directories", handler.requireOwner(http.HandlerFunc(handler.createDirectory)))
+	mux.Handle("PATCH /api/v1/directories/{directoryId}", handler.requireOwner(http.HandlerFunc(handler.renameDirectory)))
+	mux.Handle("POST /api/v1/directories/{directoryId}/move", handler.requireOwner(http.HandlerFunc(handler.moveDirectory)))
 }
 
 type spaceResponse struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
 	Visibility Visibility `json:"visibility"`
+}
+
+type directoryResponse struct {
+	ID       string  `json:"id"`
+	SpaceID  string  `json:"spaceId"`
+	ParentID *string `json:"parentId"`
+	Name     string  `json:"name"`
 }
 
 func (handler *HTTPHandler) createSpace(response http.ResponseWriter, request *http.Request) {
@@ -126,8 +137,123 @@ func (handler *HTTPHandler) renameSpace(response http.ResponseWriter, request *h
 	_ = httpapi.WriteJSON(response, http.StatusOK, toSpaceResponse(space))
 }
 
+func (handler *HTTPHandler) createDirectory(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Name     string  `json:"name"`
+		ParentID *string `json:"parentId"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	parentID := ""
+	if input.ParentID != nil {
+		parentID = *input.ParentID
+	}
+
+	directory, err := handler.service.CreateDirectory(request.Context(), request.PathValue("spaceId"), parentID, input.Name)
+	if writeDirectoryServiceError(response, err, "create") {
+		return
+	}
+	response.Header().Set("Location", "/api/v1/directories/"+directory.ID())
+	_ = httpapi.WriteJSON(response, http.StatusCreated, toDirectoryResponse(directory))
+}
+
+func (handler *HTTPHandler) listDirectories(response http.ResponseWriter, request *http.Request) {
+	directories, err := handler.service.ListDirectories(request.Context(), request.PathValue("spaceId"))
+	if errors.Is(err, ErrSpaceNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "Knowledge Space not found")
+		return
+	}
+	if err != nil {
+		httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list directories")
+		return
+	}
+	data := make([]directoryResponse, 0, len(directories))
+	for _, directory := range directories {
+		data = append(data, toDirectoryResponse(directory))
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{"data": data})
+}
+
+func (handler *HTTPHandler) renameDirectory(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	directory, err := handler.service.RenameDirectory(request.Context(), request.PathValue("directoryId"), input.Name)
+	if writeDirectoryServiceError(response, err, "rename") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toDirectoryResponse(directory))
+}
+
+func (handler *HTTPHandler) moveDirectory(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		ParentID *string `json:"parentId"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxKnowledgeRequestBytes, &input); err != nil {
+		writeDecodeError(response, err)
+		return
+	}
+	parentID := ""
+	if input.ParentID != nil {
+		parentID = *input.ParentID
+	}
+	directory, err := handler.service.MoveDirectory(request.Context(), request.PathValue("directoryId"), parentID)
+	if writeDirectoryServiceError(response, err, "move") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toDirectoryResponse(directory))
+}
+
 func toSpaceResponse(space *Space) spaceResponse {
 	return spaceResponse{ID: space.ID(), Name: space.Name(), Visibility: space.Visibility()}
+}
+
+func toDirectoryResponse(directory *Directory) directoryResponse {
+	var parentID *string
+	if directory.ParentID() != "" {
+		value := directory.ParentID()
+		parentID = &value
+	}
+	return directoryResponse{
+		ID:       directory.ID(),
+		SpaceID:  directory.SpaceID(),
+		ParentID: parentID,
+		Name:     directory.Name(),
+	}
+}
+
+func writeDirectoryServiceError(response http.ResponseWriter, err error, operation string) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrDirectoryNameRequired) || errors.Is(err, ErrDirectorySelfParent) || errors.Is(err, ErrDirectoryWrongSpace) || errors.Is(err, ErrDirectoryParentInvalid) {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error())
+		return true
+	}
+	if errors.Is(err, ErrDirectoryCycle) {
+		httpapi.WriteError(response, http.StatusConflict, "DIRECTORY_CYCLE", "directory move would create a cycle")
+		return true
+	}
+	if errors.Is(err, ErrDirectoryNameConflict) {
+		httpapi.WriteError(response, http.StatusConflict, "DIRECTORY_NAME_CONFLICT", "a directory with this name already exists under the target parent")
+		return true
+	}
+	if errors.Is(err, ErrDirectoryNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "DIRECTORY_NOT_FOUND", "directory not found")
+		return true
+	}
+	if errors.Is(err, ErrSpaceNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "Knowledge Space not found")
+		return true
+	}
+	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" directory")
+	return true
 }
 
 func writeDecodeError(response http.ResponseWriter, err error) {

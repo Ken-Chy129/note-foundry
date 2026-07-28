@@ -167,6 +167,131 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/spaces/{spaceId}/directories:
+    get:
+      operationId: listDirectories
+      summary: Return the complete Directory hierarchy for a Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      responses:
+        "200":
+          description: Flat Directory records that can be assembled into a tree by parent ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createDirectory
+      summary: Create a root or nested Directory in a Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectoryRequest"
+      responses:
+        "201":
+          description: Directory created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/directories/{directoryId}:
+    patch:
+      operationId: renameDirectory
+      summary: Rename a Directory without changing its identity or location
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/DirectoryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDirectoryRequest"
+      responses:
+        "200":
+          description: Directory renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/directories/{directoryId}/move:
+    post:
+      operationId: moveDirectory
+      summary: Move a Directory to another parent in the same Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/DirectoryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDirectoryRequest"
+      responses:
+        "200":
+          description: Directory moved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -272,6 +397,13 @@ components:
         default: 50
     SpaceId:
       name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DirectoryId:
+      name: directoryId
       in: path
       required: true
       schema:
@@ -404,3 +536,70 @@ components:
             $ref: "#/components/schemas/KnowledgeSpace"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    Directory:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - parentId
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+    CreateDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    RenameDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    MoveDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - parentId
+      properties:
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    DirectoryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Directory"

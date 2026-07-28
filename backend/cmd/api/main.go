@@ -49,8 +49,9 @@ func main() {
 	})
 	knowledgeRepository := knowledge.NewPostgresRepository(pool)
 	knowledgeService := knowledge.NewService(knowledge.ServiceConfig{
-		Spaces:     knowledgeRepository,
-		GenerateID: uuid.NewString,
+		Spaces:      knowledgeRepository,
+		Directories: knowledgeRepository,
+		GenerateID:  uuid.NewString,
 	})
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
 

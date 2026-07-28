@@ -112,6 +112,87 @@ func TestHTTPHandlerRenamesKnowledgeSpace(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerCreatesNestedDirectory(t *testing.T) {
+	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	parent, _ := NewDirectory("22222222-2222-4222-8222-222222222222", space.ID(), "", "Agents")
+	directories := &directoryRepositoryStub{found: parent}
+	service := NewService(ServiceConfig{
+		Spaces:      &spaceRepositoryStub{found: space},
+		Directories: directories,
+		GenerateID:  func() string { return "33333333-3333-4333-8333-333333333333" },
+	})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/spaces/11111111-1111-4111-8111-111111111111/directories", strings.NewReader(`{"name":"Hermes Agent","parentId":"22222222-2222-4222-8222-222222222222"}`))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if directories.created == nil || directories.created.ParentID() != parent.ID() {
+		t.Errorf("created directory = %+v", directories.created)
+	}
+}
+
+func TestHTTPHandlerListsDirectoryHierarchy(t *testing.T) {
+	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	root, _ := NewDirectory("22222222-2222-4222-8222-222222222222", space.ID(), "", "Hermes Agent")
+	child, _ := NewDirectory("33333333-3333-4333-8333-333333333333", space.ID(), root.ID(), "Architecture")
+	service := NewService(ServiceConfig{
+		Spaces:      &spaceRepositoryStub{found: space},
+		Directories: &directoryRepositoryStub{directories: []*Directory{root, child}},
+		GenerateID:  func() string { return "unused" },
+	})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/spaces/11111111-1111-4111-8111-111111111111/directories", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
+	}
+	var body struct {
+		Data []directoryResponse `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Data) != 2 || body.Data[0].ParentID != nil || body.Data[1].ParentID == nil || *body.Data[1].ParentID != root.ID() {
+		t.Errorf("directory response = %+v", body.Data)
+	}
+}
+
+func TestHTTPHandlerRejectsCyclicDirectoryMove(t *testing.T) {
+	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", VisibilityPublic)
+	directory, _ := NewDirectory("22222222-2222-4222-8222-222222222222", space.ID(), "", "Hermes Agent")
+	child, _ := NewDirectory("33333333-3333-4333-8333-333333333333", space.ID(), directory.ID(), "Architecture")
+	service := NewService(ServiceConfig{
+		Spaces: &spaceRepositoryStub{found: space},
+		Directories: &directoryRepositoryStub{
+			foundByID:  map[string]*Directory{directory.ID(): directory, child.ID(): child},
+			wouldCycle: true,
+		},
+		GenerateID: func() string { return "unused" },
+	})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/directories/22222222-2222-4222-8222-222222222222/move", strings.NewReader(`{"parentId":"33333333-3333-4333-8333-333333333333"}`))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusConflict)
+	}
+}
+
 func allowRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))
