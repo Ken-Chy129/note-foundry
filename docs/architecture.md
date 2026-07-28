@@ -1,4 +1,4 @@
-# Personal Learning Workspace — Architecture
+# NoteFoundry — Architecture
 
 ## System shape
 
@@ -90,4 +90,3 @@ Docker Compose runs:
 - Moving private content into a public space requires one confirmation and publishes it in the same action.
 - Learning Sources, drafts, revisions, management APIs, and private attachments are never public or indexable.
 - Public pages may expose source citation metadata and original URLs, never captured copies or internal files.
-

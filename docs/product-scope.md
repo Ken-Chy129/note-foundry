@@ -1,4 +1,4 @@
-# Personal Learning Workspace — Product Scope
+# NoteFoundry — Product Scope
 
 ## Product position
 
@@ -71,4 +71,3 @@ v0.1 is complete only when the Knowledge Owner can use the deployed system for a
 9. Restore a deleted note from Trash without changing its stable identity.
 10. Verify encrypted automatic backup upload and perform at least one real restore.
 11. Read comfortably on mobile and edit comfortably on desktop.
-

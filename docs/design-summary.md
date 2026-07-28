@@ -1,4 +1,4 @@
-# AI Learning Workspace — Agreed Design
+# NoteFoundry — Agreed Design
 
 ## One-sentence definition
 
@@ -82,4 +82,3 @@ Encrypted S3-compatible storage
 ## v0.1 completion test
 
 Deploy the product, create an `AI Agent/Hermes Agent` hierarchy, write and publish five genuine Hermes Agent design notes, connect them with stable links and backlinks, find them through Chinese and English search, verify public/private isolation, restore a deleted note, and perform a real backup restore. Only then is v0.1 complete.
-

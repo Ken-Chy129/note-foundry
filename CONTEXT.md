@@ -1,11 +1,11 @@
-# Personal Learning Workspace
+# NoteFoundry Domain Glossary
 
 一个面向个人学习的知识管理空间，用于记录、组织并持续完善用户在学习过程中形成的理解。
 
 ## Language
 
 **学习工作台（Learning Workspace）**：
-承载个人学习活动及其沉淀的产品整体。第一版以学习笔记的写作和组织为中心，而不是以聊天或信息推荐为中心。
+NoteFoundry 所代表的产品整体，承载个人学习活动及其沉淀。第一版以学习笔记的写作和组织为中心，而不是以聊天或信息推荐为中心。
 _避免称为_：通用文档平台、AI 聊天机器人
 
 **学习笔记（Learning Note）**：
