@@ -139,4 +139,25 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if page.TotalItems != 3 || len(page.Revisions) != 3 || page.Revisions[0].Reason != RevisionReasonRestore {
 		t.Errorf("revision page = %+v", page)
 	}
+	ownerPage, err := repository.ListNotes(ctx, NoteListFilter{SpaceID: space.ID(), Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("ListNotes() error = %v", err)
+	}
+	if ownerPage.TotalItems != 1 || len(ownerPage.Notes) != 1 || ownerPage.Notes[0].ID() != note.ID() {
+		t.Errorf("owner note page = %+v", ownerPage)
+	}
+	publicNote, err := repository.GetPublishedNote(ctx, note.ID())
+	if err != nil {
+		t.Fatalf("GetPublishedNote() error = %v", err)
+	}
+	if publicNote.Markdown != "complete draft" || publicNote.Title != "Agent Loop" {
+		t.Errorf("public note = %+v", publicNote)
+	}
+	publicPage, err := repository.ListPublishedNotes(ctx, space.ID(), 1, 20)
+	if err != nil {
+		t.Fatalf("ListPublishedNotes() error = %v", err)
+	}
+	if publicPage.TotalItems != 1 || len(publicPage.Notes) != 1 {
+		t.Errorf("public note page = %+v", publicPage)
+	}
 }

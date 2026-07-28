@@ -11,9 +11,41 @@ import (
 )
 
 var (
-	ErrNoteNotFound     = errors.New("Learning Note not found")
-	ErrRevisionNotFound = errors.New("Note Revision not found")
+	ErrNoteNotFound          = errors.New("Learning Note not found")
+	ErrPublishedNoteNotFound = errors.New("published Learning Note not found")
+	ErrRevisionNotFound      = errors.New("Note Revision not found")
 )
+
+type NoteListFilter struct {
+	SpaceID     string
+	DirectoryID string
+	Page        int
+	PageSize    int
+}
+
+type NotePage struct {
+	Notes      []*Note
+	Page       int
+	PageSize   int
+	TotalItems int
+}
+
+type PublishedNote struct {
+	ID          string
+	SpaceID     string
+	DirectoryID string
+	Title       string
+	Slug        string
+	Markdown    string
+	PublishedAt sql.NullTime
+}
+
+type PublishedNotePage struct {
+	Notes      []PublishedNote
+	Page       int
+	PageSize   int
+	TotalItems int
+}
 
 type RevisionPage struct {
 	Revisions  []Revision
@@ -55,6 +87,99 @@ func (repository *PostgresRepository) GetNote(ctx context.Context, id string) (*
 		return nil, fmt.Errorf("query Learning Note: %w", err)
 	}
 	return note, nil
+}
+
+func (repository *PostgresRepository) ListNotes(ctx context.Context, filter NoteListFilter) (NotePage, error) {
+	spaceID := nullableString(filter.SpaceID)
+	directoryID := nullableString(filter.DirectoryID)
+	var totalItems int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM learning_notes
+		WHERE trashed_at IS NULL
+			AND ($1::uuid IS NULL OR space_id = $1)
+			AND ($2::uuid IS NULL OR directory_id = $2)
+	`, spaceID, directoryID).Scan(&totalItems); err != nil {
+		return NotePage{}, fmt.Errorf("count Learning Notes: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, noteSelect+`
+		WHERE trashed_at IS NULL
+			AND ($1::uuid IS NULL OR space_id = $1)
+			AND ($2::uuid IS NULL OR directory_id = $2)
+		ORDER BY updated_at DESC, id DESC
+		LIMIT $3 OFFSET $4
+	`, spaceID, directoryID, filter.PageSize, (filter.Page-1)*filter.PageSize)
+	if err != nil {
+		return NotePage{}, fmt.Errorf("query Learning Notes: %w", err)
+	}
+	defer rows.Close()
+	notes := make([]*Note, 0, filter.PageSize)
+	for rows.Next() {
+		note, err := scanNote(rows)
+		if err != nil {
+			return NotePage{}, fmt.Errorf("scan Learning Note: %w", err)
+		}
+		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return NotePage{}, fmt.Errorf("iterate Learning Notes: %w", err)
+	}
+	return NotePage{Notes: notes, Page: filter.Page, PageSize: filter.PageSize, TotalItems: totalItems}, nil
+}
+
+func (repository *PostgresRepository) GetPublishedNote(ctx context.Context, id string) (PublishedNote, error) {
+	note, err := scanPublishedNote(repository.pool.QueryRow(ctx, publishedNoteSelect+`
+		WHERE learning_notes.id = $1
+			AND learning_notes.trashed_at IS NULL
+			AND knowledge_spaces.visibility = 'public'
+			AND learning_notes.published_at IS NOT NULL
+	`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PublishedNote{}, ErrPublishedNoteNotFound
+	}
+	if err != nil {
+		return PublishedNote{}, fmt.Errorf("query published Learning Note: %w", err)
+	}
+	return note, nil
+}
+
+func (repository *PostgresRepository) ListPublishedNotes(ctx context.Context, spaceID string, page, pageSize int) (PublishedNotePage, error) {
+	var totalItems int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM learning_notes
+		JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id
+		WHERE learning_notes.space_id = $1
+			AND learning_notes.trashed_at IS NULL
+			AND knowledge_spaces.visibility = 'public'
+			AND learning_notes.published_at IS NOT NULL
+	`, spaceID).Scan(&totalItems); err != nil {
+		return PublishedNotePage{}, fmt.Errorf("count published Learning Notes: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, publishedNoteSelect+`
+		WHERE learning_notes.space_id = $1
+			AND learning_notes.trashed_at IS NULL
+			AND knowledge_spaces.visibility = 'public'
+			AND learning_notes.published_at IS NOT NULL
+		ORDER BY learning_notes.published_at DESC, learning_notes.id DESC
+		LIMIT $2 OFFSET $3
+	`, spaceID, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return PublishedNotePage{}, fmt.Errorf("query published Learning Notes: %w", err)
+	}
+	defer rows.Close()
+	notes := make([]PublishedNote, 0, pageSize)
+	for rows.Next() {
+		note, err := scanPublishedNote(rows)
+		if err != nil {
+			return PublishedNotePage{}, fmt.Errorf("scan published Learning Note: %w", err)
+		}
+		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return PublishedNotePage{}, fmt.Errorf("iterate published Learning Notes: %w", err)
+	}
+	return PublishedNotePage{Notes: notes, Page: page, PageSize: pageSize, TotalItems: totalItems}, nil
 }
 
 func (repository *PostgresRepository) UpdateDraft(ctx context.Context, note *Note, expectedVersion int64) error {
@@ -237,6 +362,18 @@ const noteSelect = `
 	FROM learning_notes
 `
 
+const publishedNoteSelect = `
+	SELECT learning_notes.id::text,
+		learning_notes.space_id::text,
+		COALESCE(learning_notes.directory_id::text, ''),
+		learning_notes.published_title,
+		learning_notes.published_slug,
+		learning_notes.published_markdown,
+		learning_notes.published_at
+	FROM learning_notes
+	JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id
+`
+
 type rowScanner interface {
 	Scan(...any) error
 }
@@ -255,6 +392,29 @@ func scanRevision(row rowScanner) (Revision, error) {
 		return Revision{}, err
 	}
 	return revision, nil
+}
+
+func scanPublishedNote(row rowScanner) (PublishedNote, error) {
+	var note PublishedNote
+	if err := row.Scan(
+		&note.ID,
+		&note.SpaceID,
+		&note.DirectoryID,
+		&note.Title,
+		&note.Slug,
+		&note.Markdown,
+		&note.PublishedAt,
+	); err != nil {
+		return PublishedNote{}, err
+	}
+	return note, nil
+}
+
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func scanNote(row rowScanner) (*Note, error) {

@@ -2,6 +2,7 @@ package notes
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -124,6 +125,52 @@ func TestHTTPHandlerCreatesListsAndRestoresNoteRevision(t *testing.T) {
 	mux.ServeHTTP(restoreResponse, restoreRequest)
 	if restoreResponse.Code != http.StatusOK || !strings.Contains(restoreResponse.Body.String(), "earlier draft") {
 		t.Fatalf("restore response = %d %s", restoreResponse.Code, restoreResponse.Body.String())
+	}
+}
+
+func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) {
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", "11111111-1111-4111-8111-111111111111", "", "Draft title", "unfinished secret draft")
+	published := PublishedNote{
+		ID:       note.ID(),
+		SpaceID:  note.SpaceID(),
+		Title:    "Published title",
+		Slug:     "published-title",
+		Markdown: "reviewed public content",
+		PublishedAt: func() (value sql.NullTime) {
+			value.Time = time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+			value.Valid = true
+			return value
+		}(),
+	}
+	repository := &noteRepositoryStub{
+		notePage:          NotePage{Notes: []*Note{note}, Page: 1, PageSize: 20, TotalItems: 1},
+		publishedNote:     published,
+		publishedNotePage: PublishedNotePage{Notes: []PublishedNote{published}, Page: 1, PageSize: 20, TotalItems: 1},
+	}
+	service := NewService(ServiceConfig{Notes: repository, Knowledge: &knowledgeCatalogStub{}, GenerateID: idSequence("unused"), Now: time.Now})
+	handler := NewHTTPHandler(service, allowNoteRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	ownerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/notes?spaceId=11111111-1111-4111-8111-111111111111&page=1&pageSize=20", nil)
+	ownerResponse := httptest.NewRecorder()
+	mux.ServeHTTP(ownerResponse, ownerRequest)
+	if ownerResponse.Code != http.StatusOK || !strings.Contains(ownerResponse.Body.String(), "unfinished secret draft") {
+		t.Fatalf("owner response = %d %s", ownerResponse.Code, ownerResponse.Body.String())
+	}
+
+	publicRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/notes/33333333-3333-4333-8333-333333333333", nil)
+	publicResponse := httptest.NewRecorder()
+	mux.ServeHTTP(publicResponse, publicRequest)
+	if publicResponse.Code != http.StatusOK || !strings.Contains(publicResponse.Body.String(), "reviewed public content") || strings.Contains(publicResponse.Body.String(), "unfinished secret draft") {
+		t.Fatalf("public response = %d %s", publicResponse.Code, publicResponse.Body.String())
+	}
+
+	publicListRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/spaces/11111111-1111-4111-8111-111111111111/notes?page=1&pageSize=20", nil)
+	publicListResponse := httptest.NewRecorder()
+	mux.ServeHTTP(publicListResponse, publicListRequest)
+	if publicListResponse.Code != http.StatusOK || !strings.Contains(publicListResponse.Body.String(), "reviewed public content") {
+		t.Fatalf("public list response = %d %s", publicListResponse.Code, publicListResponse.Body.String())
 	}
 }
 

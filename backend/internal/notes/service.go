@@ -17,6 +17,9 @@ var (
 type Repository interface {
 	CreateNote(context.Context, *Note) error
 	GetNote(context.Context, string) (*Note, error)
+	ListNotes(context.Context, NoteListFilter) (NotePage, error)
+	GetPublishedNote(context.Context, string) (PublishedNote, error)
+	ListPublishedNotes(context.Context, string, int, int) (PublishedNotePage, error)
 	UpdateDraft(context.Context, *Note, int64) error
 	Publish(context.Context, *Note, Revision) error
 	CreateCheckpoint(context.Context, string, int64, Revision) error
@@ -85,6 +88,30 @@ func (service *Service) GetNote(ctx context.Context, id string) (*Note, error) {
 		return nil, fmt.Errorf("load Learning Note: %w", err)
 	}
 	return note, nil
+}
+
+func (service *Service) ListNotes(ctx context.Context, filter NoteListFilter) (NotePage, error) {
+	page, err := service.notes.ListNotes(ctx, filter)
+	if err != nil {
+		return NotePage{}, fmt.Errorf("list Learning Notes: %w", err)
+	}
+	return page, nil
+}
+
+func (service *Service) GetPublishedNote(ctx context.Context, id string) (PublishedNote, error) {
+	note, err := service.notes.GetPublishedNote(ctx, id)
+	if err != nil {
+		return PublishedNote{}, fmt.Errorf("load published Learning Note: %w", err)
+	}
+	return note, nil
+}
+
+func (service *Service) ListPublishedNotes(ctx context.Context, spaceID string, page, pageSize int) (PublishedNotePage, error) {
+	notes, err := service.notes.ListPublishedNotes(ctx, spaceID, page, pageSize)
+	if err != nil {
+		return PublishedNotePage{}, fmt.Errorf("list published Learning Notes: %w", err)
+	}
+	return notes, nil
 }
 
 func (service *Service) Autosave(ctx context.Context, id string, expectedVersion int64, title, markdown string) (*Note, error) {

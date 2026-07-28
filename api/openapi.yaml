@@ -380,6 +380,29 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/notes:
+    get:
+      operationId: listLearningNotes
+      summary: List current Learning Note drafts for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/DirectoryIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated current Learning Notes including owner-only drafts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNoteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       operationId: createLearningNote
       summary: Create a Learning Note draft with stable identity
@@ -589,6 +612,42 @@ paths:
           $ref: "#/components/responses/RequestTooLarge"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces/{spaceId}/notes:
+    get:
+      operationId: listPublishedLearningNotes
+      summary: List only Published Content in a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Published Content without owner drafts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedLearningNoteListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}:
+    get:
+      operationId: getPublishedLearningNote
+      summary: Get Published Content only when its Knowledge Space is public
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Published Content returned without owner draft fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedLearningNote"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -696,6 +755,18 @@ components:
       name: spaceId
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    SpaceIdQuery:
+      name: spaceId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    DirectoryIdQuery:
+      name: directoryId
+      in: query
       schema:
         type: string
         format: uuid
@@ -1014,6 +1085,64 @@ components:
           oneOf:
             - $ref: "#/components/schemas/PublishedContent"
             - type: "null"
+    LearningNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LearningNote"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    PublishedLearningNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - directoryId
+        - title
+        - slug
+        - markdown
+        - publishedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    PublishedLearningNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublishedLearningNote"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
     CreateLearningNoteRequest:
       type: object
       additionalProperties: false

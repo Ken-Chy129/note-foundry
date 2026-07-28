@@ -130,6 +130,37 @@ func TestServiceCreatesListsAndRestoresNoteRevisions(t *testing.T) {
 	}
 }
 
+func TestServiceSeparatesOwnerDraftFromAnonymousPublishedContent(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", space.ID(), "", "Draft title", "unfinished draft")
+	published := PublishedNote{
+		ID:       note.ID(),
+		SpaceID:  space.ID(),
+		Title:    "Published title",
+		Slug:     "published-title",
+		Markdown: "reviewed content",
+	}
+	repository := &noteRepositoryStub{
+		notePage:          NotePage{Notes: []*Note{note}, Page: 1, PageSize: 20, TotalItems: 1},
+		publishedNote:     published,
+		publishedNotePage: PublishedNotePage{Notes: []PublishedNote{published}, Page: 1, PageSize: 20, TotalItems: 1},
+	}
+	service := NewService(ServiceConfig{Notes: repository, Knowledge: &knowledgeCatalogStub{space: space}, GenerateID: idSequence("unused"), Now: time.Now})
+
+	ownerPage, err := service.ListNotes(context.Background(), NoteListFilter{SpaceID: space.ID(), Page: 1, PageSize: 20})
+	if err != nil || ownerPage.Notes[0].Markdown() != "unfinished draft" {
+		t.Fatalf("owner ListNotes() = %+v, %v", ownerPage, err)
+	}
+	publicNote, err := service.GetPublishedNote(context.Background(), note.ID())
+	if err != nil || publicNote.Markdown != "reviewed content" {
+		t.Fatalf("GetPublishedNote() = %+v, %v", publicNote, err)
+	}
+	publicPage, err := service.ListPublishedNotes(context.Background(), space.ID(), 1, 20)
+	if err != nil || publicPage.TotalItems != 1 {
+		t.Fatalf("ListPublishedNotes() = %+v, %v", publicPage, err)
+	}
+}
+
 type noteRepositoryStub struct {
 	created                *Note
 	found                  *Note
@@ -142,6 +173,9 @@ type noteRepositoryStub struct {
 	revisionPage           RevisionPage
 	restored               *Note
 	restoreCheckpoint      Revision
+	notePage               NotePage
+	publishedNote          PublishedNote
+	publishedNotePage      PublishedNotePage
 }
 
 func (repository *noteRepositoryStub) CreateNote(_ context.Context, note *Note) error {
@@ -151,6 +185,18 @@ func (repository *noteRepositoryStub) CreateNote(_ context.Context, note *Note) 
 
 func (repository *noteRepositoryStub) GetNote(context.Context, string) (*Note, error) {
 	return repository.found, nil
+}
+
+func (repository *noteRepositoryStub) ListNotes(context.Context, NoteListFilter) (NotePage, error) {
+	return repository.notePage, nil
+}
+
+func (repository *noteRepositoryStub) GetPublishedNote(context.Context, string) (PublishedNote, error) {
+	return repository.publishedNote, nil
+}
+
+func (repository *noteRepositoryStub) ListPublishedNotes(context.Context, string, int, int) (PublishedNotePage, error) {
+	return repository.publishedNotePage, nil
 }
 
 func (repository *noteRepositoryStub) UpdateDraft(_ context.Context, note *Note, expectedVersion int64) error {

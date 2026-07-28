@@ -23,6 +23,7 @@ func NewHTTPHandler(service *Service, requireOwner OwnerMiddleware) *HTTPHandler
 }
 
 func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.Handle("GET /api/v1/notes", handler.requireOwner(http.HandlerFunc(handler.listNotes)))
 	mux.Handle("POST /api/v1/notes", handler.requireOwner(http.HandlerFunc(handler.createNote)))
 	mux.Handle("GET /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.getNote)))
 	mux.Handle("PATCH /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.autosaveNote)))
@@ -30,6 +31,8 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.listRevisions)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.createCheckpoint)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions/{revisionId}/restore", handler.requireOwner(http.HandlerFunc(handler.restoreRevision)))
+	mux.HandleFunc("GET /api/v1/public/spaces/{spaceId}/notes", handler.listPublishedNotes)
+	mux.HandleFunc("GET /api/v1/public/notes/{noteId}", handler.getPublishedNote)
 }
 
 type noteResponse struct {
@@ -58,6 +61,16 @@ type revisionResponse struct {
 	Markdown  string         `json:"markdown"`
 	Reason    RevisionReason `json:"reason"`
 	CreatedAt string         `json:"createdAt"`
+}
+
+type publishedNoteResponse struct {
+	ID          string  `json:"id"`
+	SpaceID     string  `json:"spaceId"`
+	DirectoryID *string `json:"directoryId"`
+	Title       string  `json:"title"`
+	Slug        string  `json:"slug"`
+	Markdown    string  `json:"markdown"`
+	PublishedAt string  `json:"publishedAt"`
 }
 
 func (handler *HTTPHandler) createNote(response http.ResponseWriter, request *http.Request) {
@@ -89,6 +102,51 @@ func (handler *HTTPHandler) getNote(response http.ResponseWriter, request *http.
 		return
 	}
 	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
+}
+
+func (handler *HTTPHandler) listNotes(response http.ResponseWriter, request *http.Request) {
+	page, pageSize, ok := notePagination(response, request)
+	if !ok {
+		return
+	}
+	pageResult, err := handler.service.ListNotes(request.Context(), NoteListFilter{
+		SpaceID:     request.URL.Query().Get("spaceId"),
+		DirectoryID: request.URL.Query().Get("directoryId"),
+		Page:        page,
+		PageSize:    pageSize,
+	})
+	if writeNoteServiceError(response, err, "list") {
+		return
+	}
+	data := make([]noteResponse, 0, len(pageResult.Notes))
+	for _, note := range pageResult.Notes {
+		data = append(data, toNoteResponse(note))
+	}
+	writeNotePage(response, data, pageResult.Page, pageResult.PageSize, pageResult.TotalItems)
+}
+
+func (handler *HTTPHandler) getPublishedNote(response http.ResponseWriter, request *http.Request) {
+	note, err := handler.service.GetPublishedNote(request.Context(), request.PathValue("noteId"))
+	if writeNoteServiceError(response, err, "load published") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toPublishedNoteResponse(note))
+}
+
+func (handler *HTTPHandler) listPublishedNotes(response http.ResponseWriter, request *http.Request) {
+	page, pageSize, ok := notePagination(response, request)
+	if !ok {
+		return
+	}
+	pageResult, err := handler.service.ListPublishedNotes(request.Context(), request.PathValue("spaceId"), page, pageSize)
+	if writeNoteServiceError(response, err, "list published") {
+		return
+	}
+	data := make([]publishedNoteResponse, 0, len(pageResult.Notes))
+	for _, note := range pageResult.Notes {
+		data = append(data, toPublishedNoteResponse(note))
+	}
+	writeNotePage(response, data, pageResult.Page, pageResult.PageSize, pageResult.TotalItems)
 }
 
 func (handler *HTTPHandler) autosaveNote(response http.ResponseWriter, request *http.Request) {
@@ -227,6 +285,23 @@ func toRevisionResponse(revision Revision) revisionResponse {
 	}
 }
 
+func toPublishedNoteResponse(note PublishedNote) publishedNoteResponse {
+	var directoryID *string
+	if note.DirectoryID != "" {
+		value := note.DirectoryID
+		directoryID = &value
+	}
+	return publishedNoteResponse{
+		ID:          note.ID,
+		SpaceID:     note.SpaceID,
+		DirectoryID: directoryID,
+		Title:       note.Title,
+		Slug:        note.Slug,
+		Markdown:    note.Markdown,
+		PublishedAt: note.PublishedAt.Time.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
+	}
+}
+
 func writeNoteServiceError(response http.ResponseWriter, err error, operation string) bool {
 	if err == nil {
 		return false
@@ -245,6 +320,10 @@ func writeNoteServiceError(response http.ResponseWriter, err error, operation st
 	}
 	if errors.Is(err, ErrNoteNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "NOTE_NOT_FOUND", "Learning Note not found")
+		return true
+	}
+	if errors.Is(err, ErrPublishedNoteNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "PUBLISHED_NOTE_NOT_FOUND", "published Learning Note not found")
 		return true
 	}
 	if errors.Is(err, ErrRevisionNotFound) {
@@ -273,6 +352,36 @@ func revisionPaginationValue(request *http.Request, key string, fallback, minimu
 		return 0, errors.New("pagination value is outside the allowed range")
 	}
 	return value, nil
+}
+
+func notePagination(response http.ResponseWriter, request *http.Request) (int, int, bool) {
+	page, err := revisionPaginationValue(request, "page", 1, 1, 1_000_000)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "page must be a positive integer")
+		return 0, 0, false
+	}
+	pageSize, err := revisionPaginationValue(request, "pageSize", 50, 1, 100)
+	if err != nil {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "pageSize must be between 1 and 100")
+		return 0, 0, false
+	}
+	return page, pageSize, true
+}
+
+func writeNotePage(response http.ResponseWriter, data any, page, pageSize, totalItems int) {
+	totalPages := 0
+	if totalItems > 0 {
+		totalPages = (totalItems + pageSize - 1) / pageSize
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{
+		"data": data,
+		"pagination": map[string]int{
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalItems": totalItems,
+			"totalPages": totalPages,
+		},
+	})
 }
 
 func writeNoteDecodeError(response http.ResponseWriter, err error) {
