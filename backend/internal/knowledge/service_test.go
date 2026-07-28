@@ -88,6 +88,32 @@ func TestServiceRejectsDirectoryMoveBelowItsDescendant(t *testing.T) {
 	}
 }
 
+func TestServiceCreatesAndRenamesGlobalTag(t *testing.T) {
+	tags := &tagRepositoryStub{}
+	service := NewService(ServiceConfig{
+		Spaces:      &spaceRepositoryStub{},
+		Directories: &directoryRepositoryStub{},
+		Tags:        tags,
+		GenerateID:  func() string { return "11111111-1111-4111-8111-111111111111" },
+	})
+
+	tag, err := service.CreateTag(context.Background(), "  memory  ")
+	if err != nil {
+		t.Fatalf("CreateTag() error = %v", err)
+	}
+	if tags.created != tag || tag.Name() != "memory" {
+		t.Errorf("created tag = %+v", tag)
+	}
+	tags.found = tag
+	renamed, err := service.RenameTag(context.Background(), tag.ID(), "agent-memory")
+	if err != nil {
+		t.Fatalf("RenameTag() error = %v", err)
+	}
+	if renamed.ID() != tag.ID() || renamed.Name() != "agent-memory" || tags.updated != tag {
+		t.Errorf("renamed tag = %+v", renamed)
+	}
+}
+
 func TestServiceRenamesSpaceWithoutChangingIdentity(t *testing.T) {
 	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI", VisibilityPrivate)
 	repository := &spaceRepositoryStub{found: space}
@@ -165,4 +191,29 @@ func (repository *directoryRepositoryStub) UpdateDirectory(_ context.Context, di
 
 func (repository *directoryRepositoryStub) WouldCreateDirectoryCycle(context.Context, string, string) (bool, error) {
 	return repository.wouldCycle, nil
+}
+
+type tagRepositoryStub struct {
+	created *Tag
+	found   *Tag
+	updated *Tag
+	tags    []*Tag
+}
+
+func (repository *tagRepositoryStub) CreateTag(_ context.Context, tag *Tag) error {
+	repository.created = tag
+	return nil
+}
+
+func (repository *tagRepositoryStub) ListTags(context.Context, int, int) ([]*Tag, int, error) {
+	return repository.tags, len(repository.tags), nil
+}
+
+func (repository *tagRepositoryStub) GetTag(context.Context, string) (*Tag, error) {
+	return repository.found, nil
+}
+
+func (repository *tagRepositoryStub) UpdateTag(_ context.Context, tag *Tag) error {
+	repository.updated = tag
+	return nil
 }

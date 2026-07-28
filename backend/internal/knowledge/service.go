@@ -26,17 +26,26 @@ type DirectoryRepository interface {
 	WouldCreateDirectoryCycle(context.Context, string, string) (bool, error)
 }
 
+type TagRepository interface {
+	CreateTag(context.Context, *Tag) error
+	ListTags(context.Context, int, int) ([]*Tag, int, error)
+	GetTag(context.Context, string) (*Tag, error)
+	UpdateTag(context.Context, *Tag) error
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
 	Spaces      SpaceRepository
 	Directories DirectoryRepository
+	Tags        TagRepository
 	GenerateID  IDGenerator
 }
 
 type Service struct {
 	spaces      SpaceRepository
 	directories DirectoryRepository
+	tags        TagRepository
 	generateID  IDGenerator
 }
 
@@ -47,8 +56,48 @@ type SpacePage struct {
 	TotalItems int
 }
 
+type TagPage struct {
+	Tags       []*Tag
+	Page       int
+	PageSize   int
+	TotalItems int
+}
+
 func NewService(config ServiceConfig) *Service {
-	return &Service{spaces: config.Spaces, directories: config.Directories, generateID: config.GenerateID}
+	return &Service{spaces: config.Spaces, directories: config.Directories, tags: config.Tags, generateID: config.GenerateID}
+}
+
+func (service *Service) CreateTag(ctx context.Context, name string) (*Tag, error) {
+	tag, err := NewTag(service.generateID(), name)
+	if err != nil {
+		return nil, err
+	}
+	if err := service.tags.CreateTag(ctx, tag); err != nil {
+		return nil, fmt.Errorf("create tag: %w", err)
+	}
+	return tag, nil
+}
+
+func (service *Service) ListTags(ctx context.Context, page, pageSize int) (TagPage, error) {
+	tags, total, err := service.tags.ListTags(ctx, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return TagPage{}, fmt.Errorf("list tags: %w", err)
+	}
+	return TagPage{Tags: tags, Page: page, PageSize: pageSize, TotalItems: total}, nil
+}
+
+func (service *Service) RenameTag(ctx context.Context, id, name string) (*Tag, error) {
+	tag, err := service.tags.GetTag(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load tag: %w", err)
+	}
+	if err := tag.Rename(name); err != nil {
+		return nil, err
+	}
+	if err := service.tags.UpdateTag(ctx, tag); err != nil {
+		return nil, fmt.Errorf("update tag: %w", err)
+	}
+	return tag, nil
 }
 
 func (service *Service) CreateDirectory(ctx context.Context, spaceID, parentID, name string) (*Directory, error) {

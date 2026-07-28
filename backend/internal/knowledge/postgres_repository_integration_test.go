@@ -151,3 +151,42 @@ func TestPostgresRepositoryPersistsDirectoryHierarchyAndDetectsCycles(t *testing
 		t.Fatalf("duplicate CreateDirectory() error = %v, want %v", err, ErrDirectoryNameConflict)
 	}
 }
+
+func TestPostgresRepositoryPersistsGlobalTags(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer pool.Close()
+	if err := database.ApplyMigrations(ctx, pool); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `TRUNCATE tags`); err != nil {
+		t.Fatalf("truncate tags: %v", err)
+	}
+
+	repository := NewPostgresRepository(pool)
+	tag, _ := NewTag("11111111-1111-4111-8111-111111111111", "memory")
+	if err := repository.CreateTag(ctx, tag); err != nil {
+		t.Fatalf("CreateTag() error = %v", err)
+	}
+	tags, total, err := repository.ListTags(ctx, 50, 0)
+	if err != nil {
+		t.Fatalf("ListTags() error = %v", err)
+	}
+	if len(tags) != 1 || total != 1 || tags[0].Name() != "memory" {
+		t.Errorf("tags = %+v, total = %d", tags, total)
+	}
+
+	duplicate, _ := NewTag("22222222-2222-4222-8222-222222222222", "Memory")
+	if err := repository.CreateTag(ctx, duplicate); !errors.Is(err, ErrTagNameConflict) {
+		t.Fatalf("duplicate CreateTag() error = %v, want %v", err, ErrTagNameConflict)
+	}
+}

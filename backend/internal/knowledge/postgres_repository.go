@@ -16,6 +16,8 @@ var (
 	ErrDirectoryNameConflict  = errors.New("directory name already exists under this parent")
 	ErrDirectoryNotFound      = errors.New("directory not found")
 	ErrDirectoryParentInvalid = errors.New("directory parent does not exist in the same Knowledge Space")
+	ErrTagNameConflict        = errors.New("tag name already exists")
+	ErrTagNotFound            = errors.New("tag not found")
 )
 
 type PostgresRepository struct {
@@ -213,6 +215,74 @@ func (repository *PostgresRepository) WouldCreateDirectoryCycle(ctx context.Cont
 	return wouldCycle, nil
 }
 
+func (repository *PostgresRepository) CreateTag(ctx context.Context, tag *Tag) error {
+	_, err := repository.pool.Exec(ctx, `INSERT INTO tags (id, name) VALUES ($1, $2)`, tag.ID(), tag.Name())
+	if isUniqueViolation(err) {
+		return ErrTagNameConflict
+	}
+	if err != nil {
+		return fmt.Errorf("insert tag: %w", err)
+	}
+	return nil
+}
+
+func (repository *PostgresRepository) ListTags(ctx context.Context, limit, offset int) ([]*Tag, int, error) {
+	var total int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM tags`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count tags: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, `
+		SELECT id::text, name
+		FROM tags
+		ORDER BY lower(name), id
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query tags: %w", err)
+	}
+	defer rows.Close()
+
+	tags := make([]*Tag, 0)
+	for rows.Next() {
+		tag, err := scanTag(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		tags = append(tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate tags: %w", err)
+	}
+	return tags, total, nil
+}
+
+func (repository *PostgresRepository) GetTag(ctx context.Context, id string) (*Tag, error) {
+	tag, err := scanTag(repository.pool.QueryRow(ctx, `SELECT id::text, name FROM tags WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTagNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query tag: %w", err)
+	}
+	return tag, nil
+}
+
+func (repository *PostgresRepository) UpdateTag(ctx context.Context, tag *Tag) error {
+	result, err := repository.pool.Exec(ctx, `
+		UPDATE tags SET name = $2, updated_at = now() WHERE id = $1
+	`, tag.ID(), tag.Name())
+	if isUniqueViolation(err) {
+		return ErrTagNameConflict
+	}
+	if err != nil {
+		return fmt.Errorf("update tag: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrTagNotFound
+	}
+	return nil
+}
+
 type rowScanner interface {
 	Scan(...any) error
 }
@@ -244,6 +314,19 @@ func scanDirectory(row rowScanner) (*Directory, error) {
 		return nil, fmt.Errorf("reconstruct directory: %w", err)
 	}
 	return directory, nil
+}
+
+func scanTag(row rowScanner) (*Tag, error) {
+	var id string
+	var name string
+	if err := row.Scan(&id, &name); err != nil {
+		return nil, err
+	}
+	tag, err := NewTag(id, name)
+	if err != nil {
+		return nil, fmt.Errorf("reconstruct tag: %w", err)
+	}
+	return tag, nil
 }
 
 func isUniqueViolation(err error) bool {
