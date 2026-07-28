@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -35,8 +36,12 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/tags/{tagId}/merge", handler.requireOwner(http.HandlerFunc(handler.mergeTag)))
 	mux.Handle("GET /api/v1/notes/{noteId}/tags", handler.requireOwner(http.HandlerFunc(handler.listNoteTags)))
 	mux.Handle("PUT /api/v1/notes/{noteId}/tags", handler.requireOwner(http.HandlerFunc(handler.setNoteTags)))
+	mux.Handle("GET /api/v1/notes/{noteId}/links", handler.requireOwner(http.HandlerFunc(handler.listCurrentForwardLinks)))
+	mux.Handle("GET /api/v1/notes/{noteId}/backlinks", handler.requireOwner(http.HandlerFunc(handler.listCurrentBacklinks)))
 	mux.HandleFunc("GET /api/v1/public/spaces", handler.listPublicSpaces)
 	mux.HandleFunc("GET /api/v1/public/spaces/{spaceId}/directories", handler.listPublicDirectories)
+	mux.HandleFunc("GET /api/v1/public/notes/{noteId}/links", handler.listPublishedForwardLinks)
+	mux.HandleFunc("GET /api/v1/public/notes/{noteId}/backlinks", handler.listPublishedBacklinks)
 }
 
 type spaceResponse struct {
@@ -55,6 +60,13 @@ type directoryResponse struct {
 type tagResponse struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type linkedNoteResponse struct {
+	ID      string `json:"id"`
+	SpaceID string `json:"spaceId"`
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
 }
 
 func (handler *HTTPHandler) createSpace(response http.ResponseWriter, request *http.Request) {
@@ -387,6 +399,34 @@ func (handler *HTTPHandler) mergeTag(response http.ResponseWriter, request *http
 	_ = httpapi.WriteJSON(response, http.StatusOK, toTagResponse(tag))
 }
 
+func (handler *HTTPHandler) listCurrentForwardLinks(response http.ResponseWriter, request *http.Request) {
+	handler.writeLinks(response, request, handler.service.ListCurrentForwardLinks)
+}
+
+func (handler *HTTPHandler) listCurrentBacklinks(response http.ResponseWriter, request *http.Request) {
+	handler.writeLinks(response, request, handler.service.ListCurrentBacklinks)
+}
+
+func (handler *HTTPHandler) listPublishedForwardLinks(response http.ResponseWriter, request *http.Request) {
+	handler.writeLinks(response, request, handler.service.ListPublishedForwardLinks)
+}
+
+func (handler *HTTPHandler) listPublishedBacklinks(response http.ResponseWriter, request *http.Request) {
+	handler.writeLinks(response, request, handler.service.ListPublishedBacklinks)
+}
+
+func (handler *HTTPHandler) writeLinks(response http.ResponseWriter, request *http.Request, query func(context.Context, string) ([]LinkedNote, error)) {
+	links, err := query(request.Context(), request.PathValue("noteId"))
+	if writeLinkServiceError(response, err) {
+		return
+	}
+	data := make([]linkedNoteResponse, 0, len(links))
+	for _, link := range links {
+		data = append(data, linkedNoteResponse{ID: link.ID, SpaceID: link.SpaceID, Title: link.Title, Slug: link.Slug})
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, map[string]any{"data": data})
+}
+
 func toSpaceResponse(space *Space) spaceResponse {
 	return spaceResponse{ID: space.ID(), Name: space.Name(), Visibility: space.Visibility()}
 }
@@ -462,6 +502,18 @@ func writeTagServiceError(response http.ResponseWriter, err error, operation str
 		return true
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" tag")
+	return true
+}
+
+func writeLinkServiceError(response http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrLinkedNoteNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "NOTE_NOT_FOUND", "Learning Note not found")
+		return true
+	}
+	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list Note Links")
 	return true
 }
 

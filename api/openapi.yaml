@@ -433,6 +433,48 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/links:
+    get:
+      operationId: listCurrentNoteLinks
+      summary: List forward Note Links derived from the current canonical Markdown
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Current forward Note Links.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/backlinks:
+    get:
+      operationId: listCurrentNoteBacklinks
+      summary: List backlinks automatically derived from other current Note Markdown
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Current derived backlinks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
     put:
       operationId: setLearningNoteTags
       summary: Replace the complete global Tag set for a Learning Note
@@ -866,6 +908,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PublishedLearningNote"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}/links:
+    get:
+      operationId: listPublishedNoteLinks
+      summary: List forward links between Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Public forward Note Links.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}/backlinks:
+    get:
+      operationId: listPublishedNoteBacklinks
+      summary: List backlinks derived only from Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Public derived backlinks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1396,6 +1472,35 @@ components:
             $ref: "#/components/schemas/PublishedLearningNote"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    LinkedNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - title
+        - slug
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+    LinkedNoteDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LinkedNote"
     CreateLearningNoteRequest:
       type: object
       additionalProperties: false

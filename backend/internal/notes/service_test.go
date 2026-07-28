@@ -195,6 +195,33 @@ func TestServiceTrashRestoreRequiresPublicConfirmationAndPreservesIdentity(t *te
 	}
 }
 
+func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	repository := &noteRepositoryStub{}
+	projector := &linkProjectorStub{}
+	service := NewService(ServiceConfig{
+		Notes:      repository,
+		Knowledge:  &knowledgeCatalogStub{space: space},
+		GenerateID: idSequence("33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"),
+		Now:        time.Now,
+		Links:      projector,
+	})
+	note, err := service.CreateNote(context.Background(), space.ID(), "", "Agent Loop", `[Memory](note:22222222-2222-4222-8222-222222222222)`)
+	if err != nil {
+		t.Fatalf("CreateNote() error = %v", err)
+	}
+	if len(projector.currentTargets) != 1 || projector.currentTargets[0] != "22222222-2222-4222-8222-222222222222" {
+		t.Errorf("current targets = %+v", projector.currentTargets)
+	}
+	repository.found = note
+	if _, err := service.Publish(context.Background(), note.ID(), 1); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+	if len(projector.publishedTargets) != 1 || projector.publishedTargets[0] != projector.currentTargets[0] {
+		t.Errorf("published targets = %+v", projector.publishedTargets)
+	}
+}
+
 type noteRepositoryStub struct {
 	created                *Note
 	found                  *Note
@@ -297,6 +324,21 @@ func (repository *noteRepositoryStub) DeleteTrashedNote(_ context.Context, id st
 type knowledgeCatalogStub struct {
 	space     *knowledge.Space
 	directory *knowledge.Directory
+}
+
+type linkProjectorStub struct {
+	currentTargets   []string
+	publishedTargets []string
+}
+
+func (projector *linkProjectorStub) ReplaceCurrentNoteLinks(_ context.Context, _ string, targets []string) error {
+	projector.currentTargets = targets
+	return nil
+}
+
+func (projector *linkProjectorStub) ReplacePublishedNoteLinks(_ context.Context, _ string, targets []string) error {
+	projector.publishedTargets = targets
+	return nil
 }
 
 func (catalog *knowledgeCatalogStub) GetSpace(context.Context, string) (*knowledge.Space, error) {

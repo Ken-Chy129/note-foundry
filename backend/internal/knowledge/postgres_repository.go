@@ -20,7 +20,15 @@ var (
 	ErrTagNotFound            = errors.New("tag not found")
 	ErrTaggableNoteNotFound   = errors.New("Learning Note not found for tag association")
 	ErrTagMergeSame           = errors.New("a Tag cannot be merged into itself")
+	ErrLinkedNoteNotFound     = errors.New("Learning Note not found for Note Links")
 )
+
+type LinkedNote struct {
+	ID      string `json:"id"`
+	SpaceID string `json:"spaceId"`
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+}
 
 type PostgresRepository struct {
 	pool *pgxpool.Pool
@@ -460,6 +468,151 @@ func (repository *PostgresRepository) MergeTag(ctx context.Context, sourceID, ta
 		return nil, fmt.Errorf("commit Tag merge: %w", err)
 	}
 	return target, nil
+}
+
+func (repository *PostgresRepository) ReplaceCurrentNoteLinks(ctx context.Context, sourceID string, targetIDs []string) error {
+	return repository.replaceNoteLinks(ctx, sourceID, targetIDs, "current")
+}
+
+func (repository *PostgresRepository) ReplacePublishedNoteLinks(ctx context.Context, sourceID string, targetIDs []string) error {
+	return repository.replaceNoteLinks(ctx, sourceID, targetIDs, "published")
+}
+
+func (repository *PostgresRepository) replaceNoteLinks(ctx context.Context, sourceID string, targetIDs []string, contentState string) error {
+	transaction, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin Note Link projection: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(context.Background()) }()
+	var sourceExists bool
+	if err := transaction.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM learning_notes WHERE id = $1 AND trashed_at IS NULL)`, sourceID).Scan(&sourceExists); err != nil {
+		return fmt.Errorf("check Note Link source: %w", err)
+	}
+	if !sourceExists {
+		return ErrLinkedNoteNotFound
+	}
+	if _, err := transaction.Exec(ctx, `DELETE FROM note_links WHERE source_note_id = $1 AND content_state = $2`, sourceID, contentState); err != nil {
+		return fmt.Errorf("clear Note Links: %w", err)
+	}
+	for _, targetID := range targetIDs {
+		if _, err := transaction.Exec(ctx, `
+			INSERT INTO note_links (source_note_id, target_note_id, content_state)
+			SELECT $1, id, $3
+			FROM learning_notes
+			WHERE id = $2 AND trashed_at IS NULL
+			ON CONFLICT DO NOTHING
+		`, sourceID, targetID, contentState); err != nil {
+			return fmt.Errorf("insert Note Link: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Note Link projection: %w", err)
+	}
+	return nil
+}
+
+func (repository *PostgresRepository) ListCurrentForwardLinks(ctx context.Context, sourceID string) ([]LinkedNote, error) {
+	return repository.listOwnerLinks(ctx, sourceID, true)
+}
+
+func (repository *PostgresRepository) ListCurrentBacklinks(ctx context.Context, targetID string) ([]LinkedNote, error) {
+	return repository.listOwnerLinks(ctx, targetID, false)
+}
+
+func (repository *PostgresRepository) listOwnerLinks(ctx context.Context, noteID string, forward bool) ([]LinkedNote, error) {
+	var noteExists bool
+	if err := repository.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM learning_notes WHERE id = $1 AND trashed_at IS NULL)`, noteID).Scan(&noteExists); err != nil {
+		return nil, fmt.Errorf("check Learning Note for links: %w", err)
+	}
+	if !noteExists {
+		return nil, ErrLinkedNoteNotFound
+	}
+	noteColumn := "target_note_id"
+	filterColumn := "source_note_id"
+	if !forward {
+		noteColumn = "source_note_id"
+		filterColumn = "target_note_id"
+	}
+	query := fmt.Sprintf(`
+		SELECT linked.id::text, linked.space_id::text, linked.title, linked.slug
+		FROM note_links
+		JOIN learning_notes linked ON linked.id = note_links.%s
+		WHERE note_links.%s = $1
+			AND note_links.content_state = 'current'
+			AND linked.trashed_at IS NULL
+		ORDER BY lower(linked.title), linked.id
+	`, noteColumn, filterColumn)
+	return queryLinkedNotes(ctx, repository.pool, query, noteID)
+}
+
+func (repository *PostgresRepository) ListPublishedForwardLinks(ctx context.Context, sourceID string) ([]LinkedNote, error) {
+	return repository.listPublishedLinks(ctx, sourceID, true)
+}
+
+func (repository *PostgresRepository) ListPublishedBacklinks(ctx context.Context, targetID string) ([]LinkedNote, error) {
+	return repository.listPublishedLinks(ctx, targetID, false)
+}
+
+func (repository *PostgresRepository) listPublishedLinks(ctx context.Context, noteID string, forward bool) ([]LinkedNote, error) {
+	var publicNoteExists bool
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM learning_notes
+			JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id
+			WHERE learning_notes.id = $1
+				AND learning_notes.trashed_at IS NULL
+				AND learning_notes.published_at IS NOT NULL
+				AND knowledge_spaces.visibility = 'public'
+		)
+	`, noteID).Scan(&publicNoteExists); err != nil {
+		return nil, fmt.Errorf("check public Learning Note for links: %w", err)
+	}
+	if !publicNoteExists {
+		return nil, ErrLinkedNoteNotFound
+	}
+	noteColumn := "target_note_id"
+	filterColumn := "source_note_id"
+	if !forward {
+		noteColumn = "source_note_id"
+		filterColumn = "target_note_id"
+	}
+	query := fmt.Sprintf(`
+		SELECT linked.id::text, linked.space_id::text, linked.published_title, linked.published_slug
+		FROM note_links
+		JOIN learning_notes linked ON linked.id = note_links.%s
+		JOIN knowledge_spaces linked_space ON linked_space.id = linked.space_id
+		WHERE note_links.%s = $1
+			AND note_links.content_state = 'published'
+			AND linked.trashed_at IS NULL
+			AND linked.published_at IS NOT NULL
+			AND linked_space.visibility = 'public'
+		ORDER BY lower(linked.published_title), linked.id
+	`, noteColumn, filterColumn)
+	return queryLinkedNotes(ctx, repository.pool, query, noteID)
+}
+
+type rowsQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func queryLinkedNotes(ctx context.Context, querier rowsQuerier, query string, arguments ...any) ([]LinkedNote, error) {
+	rows, err := querier.Query(ctx, query, arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("query Note Links: %w", err)
+	}
+	defer rows.Close()
+	links := make([]LinkedNote, 0)
+	for rows.Next() {
+		var link LinkedNote
+		if err := rows.Scan(&link.ID, &link.SpaceID, &link.Title, &link.Slug); err != nil {
+			return nil, fmt.Errorf("scan Note Link: %w", err)
+		}
+		links = append(links, link)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate Note Links: %w", err)
+	}
+	return links, nil
 }
 
 type rowScanner interface {

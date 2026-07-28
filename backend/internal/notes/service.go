@@ -38,6 +38,11 @@ type KnowledgeCatalog interface {
 	GetDirectory(context.Context, string) (*knowledge.Directory, error)
 }
 
+type LinkProjector interface {
+	ReplaceCurrentNoteLinks(context.Context, string, []string) error
+	ReplacePublishedNoteLinks(context.Context, string, []string) error
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
@@ -45,6 +50,7 @@ type ServiceConfig struct {
 	Knowledge  KnowledgeCatalog
 	GenerateID IDGenerator
 	Now        func() time.Time
+	Links      LinkProjector
 }
 
 type Service struct {
@@ -52,6 +58,7 @@ type Service struct {
 	knowledge  KnowledgeCatalog
 	generateID IDGenerator
 	now        func() time.Time
+	links      LinkProjector
 }
 
 type RestoreTrashInput struct {
@@ -67,6 +74,7 @@ func NewService(config ServiceConfig) *Service {
 		knowledge:  config.Knowledge,
 		generateID: config.GenerateID,
 		now:        config.Now,
+		links:      config.Links,
 	}
 }
 
@@ -90,6 +98,9 @@ func (service *Service) CreateNote(ctx context.Context, spaceID, directoryID, ti
 	}
 	if err := service.notes.CreateNote(ctx, note); err != nil {
 		return nil, fmt.Errorf("create Learning Note: %w", err)
+	}
+	if err := service.replaceCurrentLinks(ctx, note); err != nil {
+		return nil, err
 	}
 	return note, nil
 }
@@ -137,6 +148,9 @@ func (service *Service) Autosave(ctx context.Context, id string, expectedVersion
 	if err := service.notes.UpdateDraft(ctx, note, expectedVersion); err != nil {
 		return nil, fmt.Errorf("save Learning Note draft: %w", err)
 	}
+	if err := service.replaceCurrentLinks(ctx, note); err != nil {
+		return nil, err
+	}
 	return note, nil
 }
 
@@ -162,6 +176,9 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 	}
 	if err := service.notes.Publish(ctx, note, revision); err != nil {
 		return nil, fmt.Errorf("publish Learning Note: %w", err)
+	}
+	if err := service.replacePublishedLinks(ctx, note); err != nil {
+		return nil, err
 	}
 	return note, nil
 }
@@ -204,6 +221,9 @@ func (service *Service) Restore(ctx context.Context, id, revisionID string, expe
 	}
 	if err := service.notes.Restore(ctx, note, checkpoint, expectedVersion); err != nil {
 		return nil, fmt.Errorf("restore Note Revision: %w", err)
+	}
+	if err := service.replaceCurrentLinks(ctx, note); err != nil {
+		return nil, err
 	}
 	return note, nil
 }
@@ -271,12 +291,40 @@ func (service *Service) RestoreFromTrash(ctx context.Context, id string, input R
 	if err := service.notes.RestoreFromTrash(ctx, entry.Note, revision); err != nil {
 		return nil, fmt.Errorf("restore Learning Note from Trash: %w", err)
 	}
+	if err := service.replaceCurrentLinks(ctx, entry.Note); err != nil {
+		return nil, err
+	}
+	if revision != nil {
+		if err := service.replacePublishedLinks(ctx, entry.Note); err != nil {
+			return nil, err
+		}
+	}
 	return entry.Note, nil
 }
 
 func (service *Service) DeleteTrashedNote(ctx context.Context, id string) error {
 	if err := service.notes.DeleteTrashedNote(ctx, id); err != nil {
 		return fmt.Errorf("permanently delete Learning Note: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) replaceCurrentLinks(ctx context.Context, note *Note) error {
+	if service.links == nil {
+		return nil
+	}
+	if err := service.links.ReplaceCurrentNoteLinks(ctx, note.ID(), ExtractNoteLinkTargets(note.Markdown())); err != nil {
+		return fmt.Errorf("project current Note Links: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) replacePublishedLinks(ctx context.Context, note *Note) error {
+	if service.links == nil || note.Published() == nil {
+		return nil
+	}
+	if err := service.links.ReplacePublishedNoteLinks(ctx, note.ID(), ExtractNoteLinkTargets(note.Published().Markdown)); err != nil {
+		return fmt.Errorf("project published Note Links: %w", err)
 	}
 	return nil
 }

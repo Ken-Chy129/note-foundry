@@ -53,6 +53,7 @@ func main() {
 		Spaces:      knowledgeRepository,
 		Directories: knowledgeRepository,
 		Tags:        knowledgeRepository,
+		Links:       knowledgeRepository,
 		GenerateID:  uuid.NewString,
 	})
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
@@ -62,6 +63,7 @@ func main() {
 		Knowledge:  knowledgeService,
 		GenerateID: uuid.NewString,
 		Now:        time.Now,
+		Links:      knowledgeService,
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 

@@ -283,4 +283,44 @@ func TestPostgresRepositoryPublicNavigationExcludesPrivateSpaces(t *testing.T) {
 	if len(directories) != 1 || directories[0].ID() != publicDirectory.ID() {
 		t.Errorf("public directories = %+v", directories)
 	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO learning_notes (
+			id, space_id, directory_id, title, slug, current_markdown,
+			published_title, published_slug, published_markdown, published_at
+		) VALUES
+			('55555555-5555-4555-8555-555555555555', $1, $2, 'Source draft', 'source-draft', 'draft', 'Source published', 'source-published', 'published', now()),
+			('66666666-6666-4666-8666-666666666666', $1, $2, 'Target draft', 'target-draft', 'draft', 'Target published', 'target-published', 'published', now())
+	`, publicSpace.ID(), publicDirectory.ID()); err != nil {
+		t.Fatalf("insert linked Learning Notes: %v", err)
+	}
+	sourceID := "55555555-5555-4555-8555-555555555555"
+	targetID := "66666666-6666-4666-8666-666666666666"
+	if err := repository.ReplaceCurrentNoteLinks(ctx, sourceID, []string{targetID}); err != nil {
+		t.Fatalf("ReplaceCurrentNoteLinks() error = %v", err)
+	}
+	if err := repository.ReplacePublishedNoteLinks(ctx, sourceID, []string{targetID}); err != nil {
+		t.Fatalf("ReplacePublishedNoteLinks() error = %v", err)
+	}
+	forward, err := repository.ListCurrentForwardLinks(ctx, sourceID)
+	if err != nil {
+		t.Fatalf("ListCurrentForwardLinks() error = %v", err)
+	}
+	backlinks, err := repository.ListCurrentBacklinks(ctx, targetID)
+	if err != nil {
+		t.Fatalf("ListCurrentBacklinks() error = %v", err)
+	}
+	if len(forward) != 1 || forward[0].Title != "Target draft" || len(backlinks) != 1 || backlinks[0].ID != sourceID {
+		t.Errorf("current links = forward %+v, backlinks %+v", forward, backlinks)
+	}
+	publicForward, err := repository.ListPublishedForwardLinks(ctx, sourceID)
+	if err != nil {
+		t.Fatalf("ListPublishedForwardLinks() error = %v", err)
+	}
+	publicBacklinks, err := repository.ListPublishedBacklinks(ctx, targetID)
+	if err != nil {
+		t.Fatalf("ListPublishedBacklinks() error = %v", err)
+	}
+	if len(publicForward) != 1 || publicForward[0].Title != "Target published" || len(publicBacklinks) != 1 || publicBacklinks[0].Title != "Source published" {
+		t.Errorf("published links = forward %+v, backlinks %+v", publicForward, publicBacklinks)
+	}
 }

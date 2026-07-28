@@ -39,6 +39,15 @@ type TagRepository interface {
 	MergeTag(context.Context, string, string) (*Tag, error)
 }
 
+type NoteLinkRepository interface {
+	ReplaceCurrentNoteLinks(context.Context, string, []string) error
+	ReplacePublishedNoteLinks(context.Context, string, []string) error
+	ListCurrentForwardLinks(context.Context, string) ([]LinkedNote, error)
+	ListCurrentBacklinks(context.Context, string) ([]LinkedNote, error)
+	ListPublishedForwardLinks(context.Context, string) ([]LinkedNote, error)
+	ListPublishedBacklinks(context.Context, string) ([]LinkedNote, error)
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
@@ -46,6 +55,7 @@ type ServiceConfig struct {
 	Directories DirectoryRepository
 	Tags        TagRepository
 	GenerateID  IDGenerator
+	Links       NoteLinkRepository
 }
 
 type Service struct {
@@ -53,6 +63,7 @@ type Service struct {
 	directories DirectoryRepository
 	tags        TagRepository
 	generateID  IDGenerator
+	links       NoteLinkRepository
 }
 
 type SpacePage struct {
@@ -70,7 +81,45 @@ type TagPage struct {
 }
 
 func NewService(config ServiceConfig) *Service {
-	return &Service{spaces: config.Spaces, directories: config.Directories, tags: config.Tags, generateID: config.GenerateID}
+	return &Service{spaces: config.Spaces, directories: config.Directories, tags: config.Tags, generateID: config.GenerateID, links: config.Links}
+}
+
+func (service *Service) ReplaceCurrentNoteLinks(ctx context.Context, sourceID string, targetIDs []string) error {
+	if err := service.links.ReplaceCurrentNoteLinks(ctx, sourceID, targetIDs); err != nil {
+		return fmt.Errorf("replace current Note Links: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) ReplacePublishedNoteLinks(ctx context.Context, sourceID string, targetIDs []string) error {
+	if err := service.links.ReplacePublishedNoteLinks(ctx, sourceID, targetIDs); err != nil {
+		return fmt.Errorf("replace published Note Links: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) ListCurrentForwardLinks(ctx context.Context, noteID string) ([]LinkedNote, error) {
+	return service.listLinks(ctx, noteID, service.links.ListCurrentForwardLinks, "current forward")
+}
+
+func (service *Service) ListCurrentBacklinks(ctx context.Context, noteID string) ([]LinkedNote, error) {
+	return service.listLinks(ctx, noteID, service.links.ListCurrentBacklinks, "current back")
+}
+
+func (service *Service) ListPublishedForwardLinks(ctx context.Context, noteID string) ([]LinkedNote, error) {
+	return service.listLinks(ctx, noteID, service.links.ListPublishedForwardLinks, "published forward")
+}
+
+func (service *Service) ListPublishedBacklinks(ctx context.Context, noteID string) ([]LinkedNote, error) {
+	return service.listLinks(ctx, noteID, service.links.ListPublishedBacklinks, "published back")
+}
+
+func (service *Service) listLinks(ctx context.Context, noteID string, query func(context.Context, string) ([]LinkedNote, error), kind string) ([]LinkedNote, error) {
+	links, err := query(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("list %s Note Links: %w", kind, err)
+	}
+	return links, nil
 }
 
 func (service *Service) CreateTag(ctx context.Context, name string) (*Tag, error) {

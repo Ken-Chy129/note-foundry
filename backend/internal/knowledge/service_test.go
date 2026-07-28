@@ -135,6 +135,26 @@ func TestServiceSetsDeduplicatedNoteTagsAndMergesTags(t *testing.T) {
 	}
 }
 
+func TestServiceExposesDerivedCurrentAndPublishedNoteLinks(t *testing.T) {
+	link := LinkedNote{ID: "11111111-1111-4111-8111-111111111111", SpaceID: "22222222-2222-4222-8222-222222222222", Title: "Memory", Slug: "memory"}
+	links := &noteLinkRepositoryStub{links: []LinkedNote{link}}
+	service := NewService(ServiceConfig{Links: links})
+	if err := service.ReplaceCurrentNoteLinks(context.Background(), "source", []string{link.ID}); err != nil {
+		t.Fatalf("ReplaceCurrentNoteLinks() error = %v", err)
+	}
+	if err := service.ReplacePublishedNoteLinks(context.Background(), "source", []string{link.ID}); err != nil {
+		t.Fatalf("ReplacePublishedNoteLinks() error = %v", err)
+	}
+	current, err := service.ListCurrentBacklinks(context.Background(), link.ID)
+	if err != nil || len(current) != 1 {
+		t.Fatalf("ListCurrentBacklinks() = %+v, %v", current, err)
+	}
+	published, err := service.ListPublishedForwardLinks(context.Background(), "source")
+	if err != nil || len(published) != 1 {
+		t.Fatalf("ListPublishedForwardLinks() = %+v, %v", published, err)
+	}
+}
+
 func TestServiceRenamesSpaceWithoutChangingIdentity(t *testing.T) {
 	space, _ := NewSpace("11111111-1111-4111-8111-111111111111", "AI", VisibilityPrivate)
 	repository := &spaceRepositoryStub{found: space}
@@ -264,4 +284,32 @@ func (repository *tagRepositoryStub) ListNoteTags(context.Context, string) ([]*T
 
 func (repository *tagRepositoryStub) MergeTag(context.Context, string, string) (*Tag, error) {
 	return repository.merged, nil
+}
+
+type noteLinkRepositoryStub struct {
+	links []LinkedNote
+}
+
+func (repository *noteLinkRepositoryStub) ReplaceCurrentNoteLinks(context.Context, string, []string) error {
+	return nil
+}
+
+func (repository *noteLinkRepositoryStub) ReplacePublishedNoteLinks(context.Context, string, []string) error {
+	return nil
+}
+
+func (repository *noteLinkRepositoryStub) ListCurrentForwardLinks(context.Context, string) ([]LinkedNote, error) {
+	return repository.links, nil
+}
+
+func (repository *noteLinkRepositoryStub) ListCurrentBacklinks(context.Context, string) ([]LinkedNote, error) {
+	return repository.links, nil
+}
+
+func (repository *noteLinkRepositoryStub) ListPublishedForwardLinks(context.Context, string) ([]LinkedNote, error) {
+	return repository.links, nil
+}
+
+func (repository *noteLinkRepositoryStub) ListPublishedBacklinks(context.Context, string) ([]LinkedNote, error) {
+	return repository.links, nil
 }

@@ -288,6 +288,28 @@ func TestHTTPHandlerSetsLearningNoteTagsAndMergesGlobalTags(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerReturnsDerivedForwardLinksAndBacklinks(t *testing.T) {
+	link := LinkedNote{ID: "11111111-1111-4111-8111-111111111111", SpaceID: "22222222-2222-4222-8222-222222222222", Title: "Memory", Slug: "memory"}
+	service := NewService(ServiceConfig{Links: &noteLinkRepositoryStub{links: []LinkedNote{link}}})
+	handler := NewHTTPHandler(service, allowRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	for _, path := range []string{
+		"/api/v1/notes/33333333-3333-4333-8333-333333333333/links",
+		"/api/v1/notes/33333333-3333-4333-8333-333333333333/backlinks",
+		"/api/v1/public/notes/33333333-3333-4333-8333-333333333333/links",
+		"/api/v1/public/notes/33333333-3333-4333-8333-333333333333/backlinks",
+	} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Memory") {
+			t.Errorf("%s response = %d %s", path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func allowRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))
