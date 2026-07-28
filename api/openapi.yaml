@@ -18,6 +18,8 @@ paths:
               schema:
                 type: string
                 format: uri
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/InternalError"
   /auth/github/callback:
@@ -42,6 +44,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "502":
           description: GitHub authentication failed.
           content:
@@ -131,6 +135,16 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     InternalError:
       description: An internal error occurred without exposing implementation details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many authentication requests were sent in the current window.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
       content:
         application/json:
           schema:

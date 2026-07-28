@@ -41,13 +41,14 @@ func main() {
 		Now:                    time.Now,
 	})
 	identityHTTP := identity.NewHTTPHandler(identityService, identity.HTTPConfig{
-		SecureCookies: runtimeConfig.SecureCookies,
-		PostLoginPath: "/app",
+		SecureCookies:     runtimeConfig.SecureCookies,
+		PostLoginPath:     "/app",
+		TrustForwardedFor: runtimeConfig.Environment == config.EnvironmentProduction,
 	})
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           newHandler(pool, identityHTTP),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

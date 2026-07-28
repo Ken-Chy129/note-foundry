@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
 )
@@ -14,14 +15,18 @@ const (
 )
 
 type HTTPConfig struct {
-	SecureCookies bool
-	PostLoginPath string
+	SecureCookies        bool
+	PostLoginPath        string
+	AuthenticationLimit  int
+	AuthenticationWindow time.Duration
+	TrustForwardedFor    bool
 }
 
 type HTTPHandler struct {
-	service       *Service
-	secureCookies bool
-	postLoginPath string
+	service             *Service
+	secureCookies       bool
+	postLoginPath       string
+	authenticationLimit *httpapi.FixedWindowLimiter
 }
 
 func NewHTTPHandler(service *Service, config HTTPConfig) *HTTPHandler {
@@ -33,12 +38,17 @@ func NewHTTPHandler(service *Service, config HTTPConfig) *HTTPHandler {
 		service:       service,
 		secureCookies: config.SecureCookies,
 		postLoginPath: postLoginPath,
+		authenticationLimit: httpapi.NewFixedWindowLimiter(httpapi.FixedWindowConfig{
+			Limit:             config.AuthenticationLimit,
+			Window:            config.AuthenticationWindow,
+			TrustForwardedFor: config.TrustForwardedFor,
+		}),
 	}
 }
 
 func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/github/start", handler.startGitHubLogin)
-	mux.HandleFunc("GET /auth/github/callback", handler.completeGitHubLogin)
+	mux.Handle("GET /auth/github/start", handler.authenticationLimit.Middleware(http.HandlerFunc(handler.startGitHubLogin)))
+	mux.Handle("GET /auth/github/callback", handler.authenticationLimit.Middleware(http.HandlerFunc(handler.completeGitHubLogin)))
 	mux.HandleFunc("GET /api/v1/session", handler.getSession)
 	mux.HandleFunc("POST /auth/logout", handler.logout)
 }
