@@ -26,6 +26,7 @@ type Repository interface {
 	ListRevisions(context.Context, string, int, int) (RevisionPage, error)
 	GetRevision(context.Context, string, string) (Revision, error)
 	Restore(context.Context, *Note, Revision, int64) error
+	Move(context.Context, *Note, *Revision, int64) error
 	TrashNote(context.Context, string, int64, time.Time) error
 	ListTrash(context.Context, int, int) (TrashPage, error)
 	GetTrashedNote(context.Context, string) (TrashEntry, error)
@@ -206,6 +207,65 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 	}
 	if err := service.publishAttachments(ctx, note); err != nil {
 		return nil, err
+	}
+	return note, nil
+}
+
+func (service *Service) Move(ctx context.Context, id, targetSpaceID, targetDirectoryID string, expectedVersion int64, confirmPublish bool) (*Note, error) {
+	note, err := service.notes.GetNote(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load Learning Note: %w", err)
+	}
+	if note.Version() != expectedVersion {
+		return nil, ErrVersionConflict
+	}
+	sourceSpace, err := service.knowledge.GetSpace(ctx, note.SpaceID())
+	if err != nil {
+		return nil, fmt.Errorf("load source Knowledge Space: %w", err)
+	}
+	targetSpace, err := service.knowledge.GetSpace(ctx, targetSpaceID)
+	if err != nil {
+		return nil, fmt.Errorf("load target Knowledge Space: %w", err)
+	}
+	if targetDirectoryID != "" {
+		directory, err := service.knowledge.GetDirectory(ctx, targetDirectoryID)
+		if err != nil {
+			return nil, fmt.Errorf("load target directory: %w", err)
+		}
+		if directory.SpaceID() != targetSpaceID {
+			return nil, ErrInvalidNoteDirectory
+		}
+	}
+	becamePublic := sourceSpace.Visibility() == knowledge.VisibilityPrivate && targetSpace.Visibility() == knowledge.VisibilityPublic
+	if becamePublic && !confirmPublish {
+		return nil, ErrPublicMoveConfirmationRequired
+	}
+	if err := note.Relocate(targetSpaceID, targetDirectoryID); err != nil {
+		return nil, err
+	}
+	var revision *Revision
+	if becamePublic {
+		publishedRevision, err := note.Publish(service.generateID(), service.now())
+		if err != nil {
+			return nil, err
+		}
+		revision = &publishedRevision
+	} else if targetSpace.Visibility() == knowledge.VisibilityPrivate {
+		note.MakePrivate()
+	}
+	if err := service.notes.Move(ctx, note, revision, expectedVersion); err != nil {
+		return nil, fmt.Errorf("move Learning Note: %w", err)
+	}
+	if revision != nil {
+		if err := service.replacePublishedLinks(ctx, note); err != nil {
+			return nil, err
+		}
+		if err := service.projectPublishedSearch(ctx, note); err != nil {
+			return nil, err
+		}
+		if err := service.publishAttachments(ctx, note); err != nil {
+			return nil, err
+		}
 	}
 	return note, nil
 }

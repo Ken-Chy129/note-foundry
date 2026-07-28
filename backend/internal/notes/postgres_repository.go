@@ -467,6 +467,57 @@ func (repository *PostgresRepository) Restore(ctx context.Context, note *Note, c
 	return nil
 }
 
+func (repository *PostgresRepository) Move(ctx context.Context, note *Note, revision *Revision, expectedVersion int64) error {
+	transaction, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin Learning Note move: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(context.Background()) }()
+	var directoryID any
+	if note.DirectoryID() != "" {
+		directoryID = note.DirectoryID()
+	}
+	var publishedTitle any
+	var publishedSlug any
+	var publishedMarkdown any
+	var publishedAt any
+	if note.Published() != nil {
+		publishedTitle = note.Published().Title
+		publishedSlug = note.Published().Slug
+		publishedMarkdown = note.Published().Markdown
+		publishedAt = note.Published().PublishedAt
+	}
+	result, err := transaction.Exec(ctx, `
+		UPDATE learning_notes
+		SET space_id = $3,
+			directory_id = $4,
+			published_title = $5,
+			published_slug = $6,
+			published_markdown = $7,
+			published_at = $8,
+			updated_at = now()
+		WHERE id = $1 AND current_version = $2 AND trashed_at IS NULL
+	`, note.ID(), expectedVersion, note.SpaceID(), directoryID, publishedTitle, publishedSlug, publishedMarkdown, publishedAt)
+	if err != nil {
+		return fmt.Errorf("update Learning Note location: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return repository.noteMutationMiss(ctx, note.ID())
+	}
+	if revision != nil {
+		if _, err := transaction.Exec(ctx, `
+			INSERT INTO note_revisions (id, note_id, title, slug, markdown, reason, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, revision.ID, revision.NoteID, revision.Title, revision.Slug, revision.Markdown, revision.Reason, revision.CreatedAt); err != nil {
+			return fmt.Errorf("insert private-to-public move revision: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Learning Note move: %w", err)
+	}
+	return nil
+}
+
 func (repository *PostgresRepository) noteMutationMiss(ctx context.Context, id string) error {
 	var exists bool
 	if err := repository.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM learning_notes WHERE id = $1)`, id).Scan(&exists); err != nil {

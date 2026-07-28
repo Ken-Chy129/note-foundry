@@ -235,6 +235,32 @@ func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing
 	}
 }
 
+func TestServiceMovingPrivateNoteToPublicRequiresAtomicPublishConfirmation(t *testing.T) {
+	privateSpace, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "Private", knowledge.VisibilityPrivate)
+	publicSpace, _ := knowledge.NewSpace("22222222-2222-4222-8222-222222222222", "Public", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", privateSpace.ID(), "", "Memory", "reviewed")
+	repository := &noteRepositoryStub{found: note}
+	service := NewService(ServiceConfig{
+		Notes: repository,
+		Knowledge: &knowledgeCatalogStub{spaces: map[string]*knowledge.Space{
+			privateSpace.ID(): privateSpace,
+			publicSpace.ID():  publicSpace,
+		}},
+		GenerateID: idSequence("44444444-4444-4444-8444-444444444444"),
+		Now:        time.Now,
+	})
+	if _, err := service.Move(context.Background(), note.ID(), publicSpace.ID(), "", 1, false); !errors.Is(err, ErrPublicMoveConfirmationRequired) {
+		t.Fatalf("Move(unconfirmed) error = %v, want %v", err, ErrPublicMoveConfirmationRequired)
+	}
+	moved, err := service.Move(context.Background(), note.ID(), publicSpace.ID(), "", 1, true)
+	if err != nil {
+		t.Fatalf("Move(confirmed) error = %v", err)
+	}
+	if moved.ID() != note.ID() || moved.SpaceID() != publicSpace.ID() || moved.Published() == nil || repository.moveRevision == nil {
+		t.Errorf("moved = %+v, revision = %+v", moved, repository.moveRevision)
+	}
+}
+
 type noteRepositoryStub struct {
 	created                *Note
 	found                  *Note
@@ -256,6 +282,8 @@ type noteRepositoryStub struct {
 	trashRestoreNote       *Note
 	trashRestoreRevision   *Revision
 	deletedTrashID         string
+	moved                  *Note
+	moveRevision           *Revision
 }
 
 func (repository *noteRepositoryStub) CreateNote(_ context.Context, note *Note) error {
@@ -310,6 +338,12 @@ func (repository *noteRepositoryStub) Restore(_ context.Context, note *Note, che
 	return nil
 }
 
+func (repository *noteRepositoryStub) Move(_ context.Context, note *Note, revision *Revision, _ int64) error {
+	repository.moved = note
+	repository.moveRevision = revision
+	return nil
+}
+
 func (repository *noteRepositoryStub) TrashNote(_ context.Context, id string, _ int64, _ time.Time) error {
 	repository.trashedID = id
 	return nil
@@ -336,6 +370,7 @@ func (repository *noteRepositoryStub) DeleteTrashedNote(_ context.Context, id st
 
 type knowledgeCatalogStub struct {
 	space     *knowledge.Space
+	spaces    map[string]*knowledge.Space
 	directory *knowledge.Directory
 }
 
@@ -378,7 +413,10 @@ func (projector *linkProjectorStub) ReplacePublishedNoteLinks(_ context.Context,
 	return nil
 }
 
-func (catalog *knowledgeCatalogStub) GetSpace(context.Context, string) (*knowledge.Space, error) {
+func (catalog *knowledgeCatalogStub) GetSpace(_ context.Context, id string) (*knowledge.Space, error) {
+	if catalog.spaces != nil {
+		return catalog.spaces[id], nil
+	}
 	return catalog.space, nil
 }
 

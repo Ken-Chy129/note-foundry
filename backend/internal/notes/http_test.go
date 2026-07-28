@@ -222,6 +222,31 @@ func TestHTTPHandlerTrashRestoreAndPermanentDeleteCommands(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerMovesPrivateNoteToPublicWithConfirmation(t *testing.T) {
+	privateSpace, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "Private", knowledge.VisibilityPrivate)
+	publicSpace, _ := knowledge.NewSpace("22222222-2222-4222-8222-222222222222", "Public", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", privateSpace.ID(), "", "Memory", "reviewed")
+	repository := &noteRepositoryStub{found: note}
+	service := NewService(ServiceConfig{
+		Notes: repository,
+		Knowledge: &knowledgeCatalogStub{spaces: map[string]*knowledge.Space{
+			privateSpace.ID(): privateSpace,
+			publicSpace.ID():  publicSpace,
+		}},
+		GenerateID: idSequence("44444444-4444-4444-8444-444444444444"),
+		Now:        time.Now,
+	})
+	handler := NewHTTPHandler(service, allowNoteRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/notes/33333333-3333-4333-8333-333333333333/move", strings.NewReader(`{"expectedVersion":1,"spaceId":"22222222-2222-4222-8222-222222222222","directoryId":null,"confirmPublish":true}`))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"spaceId":"22222222-2222-4222-8222-222222222222"`) || !strings.Contains(response.Body.String(), `"published"`) {
+		t.Fatalf("move response = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func allowNoteRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

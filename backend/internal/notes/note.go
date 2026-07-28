@@ -15,6 +15,7 @@ var (
 	ErrRevisionWrongNote                 = errors.New("Note Revision belongs to another Learning Note")
 	ErrVersionConflict                   = errors.New("Learning Note was changed by another save")
 	ErrPublicRestoreConfirmationRequired = errors.New("restoring a Learning Note to a public Knowledge Space requires publish confirmation")
+	ErrPublicMoveConfirmationRequired    = errors.New("moving a private Learning Note to a public Knowledge Space requires publish confirmation")
 )
 
 type RevisionReason string

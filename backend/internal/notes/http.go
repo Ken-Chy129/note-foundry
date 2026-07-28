@@ -28,6 +28,7 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.getNote)))
 	mux.Handle("PATCH /api/v1/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.autosaveNote)))
 	mux.Handle("POST /api/v1/notes/{noteId}/publish", handler.requireOwner(http.HandlerFunc(handler.publishNote)))
+	mux.Handle("POST /api/v1/notes/{noteId}/move", handler.requireOwner(http.HandlerFunc(handler.moveNote)))
 	mux.Handle("GET /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.listRevisions)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.createCheckpoint)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions/{revisionId}/restore", handler.requireOwner(http.HandlerFunc(handler.restoreRevision)))
@@ -185,6 +186,28 @@ func (handler *HTTPHandler) publishNote(response http.ResponseWriter, request *h
 	}
 	note, err := handler.service.Publish(request.Context(), request.PathValue("noteId"), input.ExpectedVersion)
 	if writeNoteServiceError(response, err, "publish") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
+}
+
+func (handler *HTTPHandler) moveNote(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		ExpectedVersion int64   `json:"expectedVersion"`
+		SpaceID         string  `json:"spaceId"`
+		DirectoryID     *string `json:"directoryId"`
+		ConfirmPublish  bool    `json:"confirmPublish"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxNoteRequestBytes, &input); err != nil {
+		writeNoteDecodeError(response, err)
+		return
+	}
+	directoryID := ""
+	if input.DirectoryID != nil {
+		directoryID = *input.DirectoryID
+	}
+	note, err := handler.service.Move(request.Context(), request.PathValue("noteId"), input.SpaceID, directoryID, input.ExpectedVersion, input.ConfirmPublish)
+	if writeNoteServiceError(response, err, "move") {
 		return
 	}
 	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
@@ -395,6 +418,10 @@ func writeNoteServiceError(response http.ResponseWriter, err error, operation st
 	}
 	if errors.Is(err, ErrPublicRestoreConfirmationRequired) {
 		httpapi.WriteError(response, http.StatusConflict, "PUBLIC_RESTORE_CONFIRMATION_REQUIRED", err.Error())
+		return true
+	}
+	if errors.Is(err, ErrPublicMoveConfirmationRequired) {
+		httpapi.WriteError(response, http.StatusConflict, "PUBLIC_MOVE_CONFIRMATION_REQUIRED", err.Error())
 		return true
 	}
 	if errors.Is(err, ErrNoteNotFound) {

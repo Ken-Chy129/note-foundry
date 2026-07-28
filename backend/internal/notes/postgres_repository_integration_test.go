@@ -160,6 +160,37 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if publicPage.TotalItems != 1 || len(publicPage.Notes) != 1 {
 		t.Errorf("public note page = %+v", publicPage)
 	}
+	privateSpace, _ := knowledge.NewSpace("88888888-8888-4888-8888-888888888888", "Private", knowledge.VisibilityPrivate)
+	if err := knowledgeRepository.CreateSpace(ctx, privateSpace); err != nil {
+		t.Fatalf("CreateSpace(private) error = %v", err)
+	}
+	if err := restored.Relocate(privateSpace.ID(), ""); err != nil {
+		t.Fatalf("Relocate(private) error = %v", err)
+	}
+	restored.MakePrivate()
+	if err := repository.Move(ctx, restored, nil, 4); err != nil {
+		t.Fatalf("Move(public to private) error = %v", err)
+	}
+	if _, err := repository.GetPublishedNote(ctx, note.ID()); !errors.Is(err, ErrPublishedNoteNotFound) {
+		t.Fatalf("GetPublishedNote(after private move) error = %v, want %v", err, ErrPublishedNoteNotFound)
+	}
+	privateCopy, err := repository.GetNote(ctx, note.ID())
+	if err != nil {
+		t.Fatalf("GetNote(private move) error = %v", err)
+	}
+	if err := privateCopy.Relocate(space.ID(), directory.ID()); err != nil {
+		t.Fatalf("Relocate(public) error = %v", err)
+	}
+	moveRevision, err := privateCopy.Publish("99999999-9999-4999-8999-999999999999", publishAt.Add(3*time.Minute))
+	if err != nil {
+		t.Fatalf("Publish(private to public move) error = %v", err)
+	}
+	if err := repository.Move(ctx, privateCopy, &moveRevision, 4); err != nil {
+		t.Fatalf("Move(private to public) error = %v", err)
+	}
+	if _, err := repository.GetPublishedNote(ctx, note.ID()); err != nil {
+		t.Fatalf("GetPublishedNote(after public move) error = %v", err)
+	}
 	trashedAt := publishAt.Add(3 * time.Minute)
 	if err := repository.TrashNote(ctx, note.ID(), 4, trashedAt); err != nil {
 		t.Fatalf("TrashNote() error = %v", err)
