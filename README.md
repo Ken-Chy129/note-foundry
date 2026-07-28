@@ -4,7 +4,19 @@
 
 ## 当前状态
 
-项目处于设计完成、准备实现 v0.1 的阶段，尚未开始业务代码开发。
+项目已进入 v0.1 增量开发阶段。当前后端骨架位于 `backend/`，首个切片建立了可运行的 Go API 健康检查和 Knowledge Space 核心领域规则。
+
+## 本地开发
+
+需要 Go 1.24 或更高版本。
+
+```bash
+cd backend
+go test ./...
+go run ./cmd/api
+```
+
+API 默认监听 `http://localhost:8080`，健康检查地址为 `GET /healthz`。
 
 ## 版本路线
 
