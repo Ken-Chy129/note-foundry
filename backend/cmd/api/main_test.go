@@ -13,7 +13,7 @@ func TestHealthEndpointReportsReadyAPI(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(readinessStub{}).ServeHTTP(response, request)
+	newHandler(readinessStub{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
@@ -37,7 +37,7 @@ func TestHealthEndpointRejectsUnsupportedMethods(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/healthz", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(readinessStub{}).ServeHTTP(response, request)
+	newHandler(readinessStub{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusMethodNotAllowed)
@@ -48,7 +48,7 @@ func TestReadinessEndpointReportsDatabaseAvailability(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(readinessStub{}).ServeHTTP(response, request)
+	newHandler(readinessStub{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
@@ -59,7 +59,7 @@ func TestReadinessEndpointHidesDatabaseFailureDetails(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(readinessStub{err: errors.New("password authentication failed for secret-user")}).ServeHTTP(response, request)
+	newHandler(readinessStub{err: errors.New("password authentication failed for secret-user")}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusServiceUnavailable)
