@@ -26,6 +26,11 @@ type Repository interface {
 	ListRevisions(context.Context, string, int, int) (RevisionPage, error)
 	GetRevision(context.Context, string, string) (Revision, error)
 	Restore(context.Context, *Note, Revision, int64) error
+	TrashNote(context.Context, string, int64, time.Time) error
+	ListTrash(context.Context, int, int) (TrashPage, error)
+	GetTrashedNote(context.Context, string) (TrashEntry, error)
+	RestoreFromTrash(context.Context, *Note, *Revision) error
+	DeleteTrashedNote(context.Context, string) error
 }
 
 type KnowledgeCatalog interface {
@@ -47,6 +52,13 @@ type Service struct {
 	knowledge  KnowledgeCatalog
 	generateID IDGenerator
 	now        func() time.Time
+}
+
+type RestoreTrashInput struct {
+	SpaceID           string
+	DirectoryID       string
+	LocationSpecified bool
+	ConfirmPublish    bool
 }
 
 func NewService(config ServiceConfig) *Service {
@@ -194,4 +206,77 @@ func (service *Service) Restore(ctx context.Context, id, revisionID string, expe
 		return nil, fmt.Errorf("restore Note Revision: %w", err)
 	}
 	return note, nil
+}
+
+func (service *Service) TrashNote(ctx context.Context, id string, expectedVersion int64) error {
+	if _, err := service.notes.GetNote(ctx, id); err != nil {
+		return fmt.Errorf("load Learning Note: %w", err)
+	}
+	if err := service.notes.TrashNote(ctx, id, expectedVersion, service.now()); err != nil {
+		return fmt.Errorf("move Learning Note to Trash: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) ListTrash(ctx context.Context, page, pageSize int) (TrashPage, error) {
+	entries, err := service.notes.ListTrash(ctx, page, pageSize)
+	if err != nil {
+		return TrashPage{}, fmt.Errorf("list Trash: %w", err)
+	}
+	return entries, nil
+}
+
+func (service *Service) RestoreFromTrash(ctx context.Context, id string, input RestoreTrashInput) (*Note, error) {
+	entry, err := service.notes.GetTrashedNote(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("load trashed Learning Note: %w", err)
+	}
+	spaceID := input.SpaceID
+	if spaceID == "" {
+		spaceID = entry.Note.SpaceID()
+	}
+	space, err := service.knowledge.GetSpace(ctx, spaceID)
+	if err != nil {
+		return nil, fmt.Errorf("load restore Knowledge Space: %w", err)
+	}
+	directoryID := input.DirectoryID
+	if !input.LocationSpecified {
+		directoryID = entry.Note.DirectoryID()
+	}
+	if directoryID != "" {
+		directory, err := service.knowledge.GetDirectory(ctx, directoryID)
+		if err != nil {
+			return nil, fmt.Errorf("load restore directory: %w", err)
+		}
+		if directory.SpaceID() != spaceID {
+			return nil, ErrInvalidNoteDirectory
+		}
+	}
+	if err := entry.Note.Relocate(spaceID, directoryID); err != nil {
+		return nil, err
+	}
+	var revision *Revision
+	if space.Visibility() == knowledge.VisibilityPublic {
+		if !input.ConfirmPublish {
+			return nil, ErrPublicRestoreConfirmationRequired
+		}
+		publishedRevision, err := entry.Note.Publish(service.generateID(), service.now())
+		if err != nil {
+			return nil, err
+		}
+		revision = &publishedRevision
+	} else {
+		entry.Note.MakePrivate()
+	}
+	if err := service.notes.RestoreFromTrash(ctx, entry.Note, revision); err != nil {
+		return nil, fmt.Errorf("restore Learning Note from Trash: %w", err)
+	}
+	return entry.Note, nil
+}
+
+func (service *Service) DeleteTrashedNote(ctx context.Context, id string) error {
+	if err := service.notes.DeleteTrashedNote(ctx, id); err != nil {
+		return fmt.Errorf("permanently delete Learning Note: %w", err)
+	}
+	return nil
 }

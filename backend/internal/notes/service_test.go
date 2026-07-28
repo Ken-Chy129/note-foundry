@@ -161,6 +161,40 @@ func TestServiceSeparatesOwnerDraftFromAnonymousPublishedContent(t *testing.T) {
 	}
 }
 
+func TestServiceTrashRestoreRequiresPublicConfirmationAndPreservesIdentity(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", space.ID(), "", "Agent Loop", "reviewed")
+	repository := &noteRepositoryStub{found: note, trashEntry: TrashEntry{Note: note, TrashedAt: time.Now()}}
+	service := NewService(ServiceConfig{
+		Notes:      repository,
+		Knowledge:  &knowledgeCatalogStub{space: space},
+		GenerateID: idSequence("44444444-4444-4444-8444-444444444444"),
+		Now:        func() time.Time { return time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC) },
+	})
+	if err := service.TrashNote(context.Background(), note.ID(), 1); err != nil {
+		t.Fatalf("TrashNote() error = %v", err)
+	}
+	if repository.trashedID != note.ID() {
+		t.Errorf("trashed id = %q", repository.trashedID)
+	}
+	if _, err := service.RestoreFromTrash(context.Background(), note.ID(), RestoreTrashInput{}); !errors.Is(err, ErrPublicRestoreConfirmationRequired) {
+		t.Fatalf("RestoreFromTrash() error = %v, want %v", err, ErrPublicRestoreConfirmationRequired)
+	}
+	restored, err := service.RestoreFromTrash(context.Background(), note.ID(), RestoreTrashInput{ConfirmPublish: true})
+	if err != nil {
+		t.Fatalf("confirmed RestoreFromTrash() error = %v", err)
+	}
+	if restored.ID() != note.ID() || repository.trashRestoreRevision == nil || repository.trashRestoreRevision.Reason != RevisionReasonPublish {
+		t.Errorf("restored = %+v, revision = %+v", restored, repository.trashRestoreRevision)
+	}
+	if err := service.DeleteTrashedNote(context.Background(), note.ID()); err != nil {
+		t.Fatalf("DeleteTrashedNote() error = %v", err)
+	}
+	if repository.deletedTrashID != note.ID() {
+		t.Errorf("deleted trash id = %q", repository.deletedTrashID)
+	}
+}
+
 type noteRepositoryStub struct {
 	created                *Note
 	found                  *Note
@@ -176,6 +210,12 @@ type noteRepositoryStub struct {
 	notePage               NotePage
 	publishedNote          PublishedNote
 	publishedNotePage      PublishedNotePage
+	trashedID              string
+	trashEntry             TrashEntry
+	trashPage              TrashPage
+	trashRestoreNote       *Note
+	trashRestoreRevision   *Revision
+	deletedTrashID         string
 }
 
 func (repository *noteRepositoryStub) CreateNote(_ context.Context, note *Note) error {
@@ -227,6 +267,30 @@ func (repository *noteRepositoryStub) GetRevision(context.Context, string, strin
 func (repository *noteRepositoryStub) Restore(_ context.Context, note *Note, checkpoint Revision, _ int64) error {
 	repository.restored = note
 	repository.restoreCheckpoint = checkpoint
+	return nil
+}
+
+func (repository *noteRepositoryStub) TrashNote(_ context.Context, id string, _ int64, _ time.Time) error {
+	repository.trashedID = id
+	return nil
+}
+
+func (repository *noteRepositoryStub) ListTrash(context.Context, int, int) (TrashPage, error) {
+	return repository.trashPage, nil
+}
+
+func (repository *noteRepositoryStub) GetTrashedNote(context.Context, string) (TrashEntry, error) {
+	return repository.trashEntry, nil
+}
+
+func (repository *noteRepositoryStub) RestoreFromTrash(_ context.Context, note *Note, revision *Revision) error {
+	repository.trashRestoreNote = note
+	repository.trashRestoreRevision = revision
+	return nil
+}
+
+func (repository *noteRepositoryStub) DeleteTrashedNote(_ context.Context, id string) error {
+	repository.deletedTrashID = id
 	return nil
 }
 

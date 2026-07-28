@@ -113,3 +113,20 @@ func TestManualCheckpointSnapshotsCurrentDraft(t *testing.T) {
 		t.Errorf("version = %d, want unchanged", note.Version())
 	}
 }
+
+func TestRelocatePreservesIdentityAndPrivateMoveClearsPublishedContent(t *testing.T) {
+	note, _ := NewNote("note-1", "space-1", "directory-1", "Current", "markdown")
+	if _, err := note.Publish("revision-1", time.Now()); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+	if err := note.Relocate("space-2", "directory-2"); err != nil {
+		t.Fatalf("Relocate() error = %v", err)
+	}
+	note.MakePrivate()
+	if note.ID() != "note-1" || note.SpaceID() != "space-2" || note.DirectoryID() != "directory-2" {
+		t.Errorf("relocated identity/location = %q/%q/%q", note.ID(), note.SpaceID(), note.DirectoryID())
+	}
+	if note.Published() != nil {
+		t.Errorf("Published Content = %+v, want nil", note.Published())
+	}
+}

@@ -174,6 +174,54 @@ func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) 
 	}
 }
 
+func TestHTTPHandlerTrashRestoreAndPermanentDeleteCommands(t *testing.T) {
+	space, _ := knowledge.NewSpace("11111111-1111-4111-8111-111111111111", "AI Agent", knowledge.VisibilityPublic)
+	note, _ := NewNote("33333333-3333-4333-8333-333333333333", space.ID(), "", "Agent Loop", "reviewed")
+	trashedAt := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	repository := &noteRepositoryStub{
+		found:      note,
+		trashEntry: TrashEntry{Note: note, TrashedAt: trashedAt},
+		trashPage:  TrashPage{Entries: []TrashEntry{{Note: note, TrashedAt: trashedAt}}, Page: 1, PageSize: 20, TotalItems: 1},
+	}
+	service := NewService(ServiceConfig{
+		Notes:      repository,
+		Knowledge:  &knowledgeCatalogStub{space: space},
+		GenerateID: idSequence("44444444-4444-4444-8444-444444444444"),
+		Now:        func() time.Time { return trashedAt },
+	})
+	handler := NewHTTPHandler(service, allowNoteRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	trashRequest := httptest.NewRequest(http.MethodPost, "/api/v1/notes/33333333-3333-4333-8333-333333333333/trash", strings.NewReader(`{"expectedVersion":1}`))
+	trashResponse := httptest.NewRecorder()
+	mux.ServeHTTP(trashResponse, trashRequest)
+	if trashResponse.Code != http.StatusNoContent {
+		t.Fatalf("trash response = %d %s", trashResponse.Code, trashResponse.Body.String())
+	}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/trash/notes?page=1&pageSize=20", nil)
+	listResponse := httptest.NewRecorder()
+	mux.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK || !strings.Contains(listResponse.Body.String(), note.ID()) {
+		t.Fatalf("trash list response = %d %s", listResponse.Code, listResponse.Body.String())
+	}
+
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/api/v1/trash/notes/33333333-3333-4333-8333-333333333333/restore", strings.NewReader(`{"confirmPublish":true}`))
+	restoreResponse := httptest.NewRecorder()
+	mux.ServeHTTP(restoreResponse, restoreRequest)
+	if restoreResponse.Code != http.StatusOK || !strings.Contains(restoreResponse.Body.String(), note.ID()) {
+		t.Fatalf("restore response = %d %s", restoreResponse.Code, restoreResponse.Body.String())
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/trash/notes/33333333-3333-4333-8333-333333333333", nil)
+	deleteResponse := httptest.NewRecorder()
+	mux.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("delete response = %d %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+}
+
 func allowNoteRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(response, request.WithContext(context.Background()))

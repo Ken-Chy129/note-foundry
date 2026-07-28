@@ -612,6 +612,109 @@ paths:
           $ref: "#/components/responses/RequestTooLarge"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/trash:
+    post:
+      operationId: trashLearningNote
+      summary: Move a Learning Note to Trash without changing its stable identity
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "204":
+          description: Learning Note moved to Trash.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes:
+    get:
+      operationId: listTrashedLearningNotes
+      summary: List Learning Notes in non-expiring Trash
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated trashed Learning Notes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashNoteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes/{noteId}/restore:
+    post:
+      operationId: restoreLearningNoteFromTrash
+      summary: Restore the original Note identity, optionally selecting a new location
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreTrashNoteRequest"
+      responses:
+        "200":
+          description: Learning Note restored. Public targets are published in the same confirmed action.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes/{noteId}:
+    delete:
+      operationId: permanentlyDeleteLearningNote
+      summary: Explicitly and permanently delete a Learning Note already in Trash
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "204":
+          description: Learning Note permanently deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/public/spaces/{spaceId}/notes:
     get:
       operationId: listPublishedLearningNotes
@@ -1282,3 +1385,45 @@ components:
             $ref: "#/components/schemas/NoteRevision"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    TrashNoteEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - note
+        - trashedAt
+      properties:
+        note:
+          $ref: "#/components/schemas/LearningNote"
+        trashedAt:
+          type: string
+          format: date-time
+    TrashNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashNoteEntry"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    RestoreTrashNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmPublish
+      properties:
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        confirmPublish:
+          type: boolean
+          description: Must be true when restoring into a public Knowledge Space; restoration and publication are atomic.

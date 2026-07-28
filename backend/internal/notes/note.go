@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	ErrNoteIDRequired      = errors.New("Learning Note id is required")
-	ErrNoteSpaceIDRequired = errors.New("Learning Note Knowledge Space id is required")
-	ErrNoteTitleRequired   = errors.New("Learning Note title is required")
-	ErrRevisionIDRequired  = errors.New("Note Revision id is required")
-	ErrRevisionWrongNote   = errors.New("Note Revision belongs to another Learning Note")
-	ErrVersionConflict     = errors.New("Learning Note was changed by another save")
+	ErrNoteIDRequired                    = errors.New("Learning Note id is required")
+	ErrNoteSpaceIDRequired               = errors.New("Learning Note Knowledge Space id is required")
+	ErrNoteTitleRequired                 = errors.New("Learning Note title is required")
+	ErrRevisionIDRequired                = errors.New("Note Revision id is required")
+	ErrRevisionWrongNote                 = errors.New("Note Revision belongs to another Learning Note")
+	ErrVersionConflict                   = errors.New("Learning Note was changed by another save")
+	ErrPublicRestoreConfirmationRequired = errors.New("restoring a Learning Note to a public Knowledge Space requires publish confirmation")
 )
 
 type RevisionReason string
@@ -169,6 +170,20 @@ func (note *Note) Restore(expectedVersion int64, target Revision, checkpointID s
 	note.markdown = target.Markdown
 	note.version++
 	return checkpoint, nil
+}
+
+func (note *Note) Relocate(spaceID, directoryID string) error {
+	spaceID = strings.TrimSpace(spaceID)
+	if spaceID == "" {
+		return ErrNoteSpaceIDRequired
+	}
+	note.spaceID = spaceID
+	note.directoryID = strings.TrimSpace(directoryID)
+	return nil
+}
+
+func (note *Note) MakePrivate() {
+	note.published = nil
 }
 
 func slugify(title string) string {

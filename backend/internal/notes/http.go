@@ -31,6 +31,10 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.listRevisions)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions", handler.requireOwner(http.HandlerFunc(handler.createCheckpoint)))
 	mux.Handle("POST /api/v1/notes/{noteId}/revisions/{revisionId}/restore", handler.requireOwner(http.HandlerFunc(handler.restoreRevision)))
+	mux.Handle("POST /api/v1/notes/{noteId}/trash", handler.requireOwner(http.HandlerFunc(handler.trashNote)))
+	mux.Handle("GET /api/v1/trash/notes", handler.requireOwner(http.HandlerFunc(handler.listTrash)))
+	mux.Handle("POST /api/v1/trash/notes/{noteId}/restore", handler.requireOwner(http.HandlerFunc(handler.restoreFromTrash)))
+	mux.Handle("DELETE /api/v1/trash/notes/{noteId}", handler.requireOwner(http.HandlerFunc(handler.deleteTrashedNote)))
 	mux.HandleFunc("GET /api/v1/public/spaces/{spaceId}/notes", handler.listPublishedNotes)
 	mux.HandleFunc("GET /api/v1/public/notes/{noteId}", handler.getPublishedNote)
 }
@@ -71,6 +75,11 @@ type publishedNoteResponse struct {
 	Slug        string  `json:"slug"`
 	Markdown    string  `json:"markdown"`
 	PublishedAt string  `json:"publishedAt"`
+}
+
+type trashEntryResponse struct {
+	Note      noteResponse `json:"note"`
+	TrashedAt string       `json:"trashedAt"`
 }
 
 func (handler *HTTPHandler) createNote(response http.ResponseWriter, request *http.Request) {
@@ -246,6 +255,72 @@ func (handler *HTTPHandler) restoreRevision(response http.ResponseWriter, reques
 	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
 }
 
+func (handler *HTTPHandler) trashNote(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		ExpectedVersion int64 `json:"expectedVersion"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxNoteRequestBytes, &input); err != nil {
+		writeNoteDecodeError(response, err)
+		return
+	}
+	if err := handler.service.TrashNote(request.Context(), request.PathValue("noteId"), input.ExpectedVersion); writeNoteServiceError(response, err, "trash") {
+		return
+	}
+	response.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *HTTPHandler) listTrash(response http.ResponseWriter, request *http.Request) {
+	page, pageSize, ok := notePagination(response, request)
+	if !ok {
+		return
+	}
+	pageResult, err := handler.service.ListTrash(request.Context(), page, pageSize)
+	if writeNoteServiceError(response, err, "list Trash") {
+		return
+	}
+	data := make([]trashEntryResponse, 0, len(pageResult.Entries))
+	for _, entry := range pageResult.Entries {
+		data = append(data, trashEntryResponse{
+			Note:      toNoteResponse(entry.Note),
+			TrashedAt: entry.TrashedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
+		})
+	}
+	writeNotePage(response, data, pageResult.Page, pageResult.PageSize, pageResult.TotalItems)
+}
+
+func (handler *HTTPHandler) restoreFromTrash(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		SpaceID        string  `json:"spaceId"`
+		DirectoryID    *string `json:"directoryId"`
+		ConfirmPublish bool    `json:"confirmPublish"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxNoteRequestBytes, &input); err != nil {
+		writeNoteDecodeError(response, err)
+		return
+	}
+	directoryID := ""
+	if input.DirectoryID != nil {
+		directoryID = *input.DirectoryID
+	}
+	note, err := handler.service.RestoreFromTrash(request.Context(), request.PathValue("noteId"), RestoreTrashInput{
+		SpaceID:           input.SpaceID,
+		DirectoryID:       directoryID,
+		LocationSpecified: input.SpaceID != "" || input.DirectoryID != nil,
+		ConfirmPublish:    input.ConfirmPublish,
+	})
+	if writeNoteServiceError(response, err, "restore from Trash") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toNoteResponse(note))
+}
+
+func (handler *HTTPHandler) deleteTrashedNote(response http.ResponseWriter, request *http.Request) {
+	if err := handler.service.DeleteTrashedNote(request.Context(), request.PathValue("noteId")); writeNoteServiceError(response, err, "permanently delete") {
+		return
+	}
+	response.WriteHeader(http.StatusNoContent)
+}
+
 func toNoteResponse(note *Note) noteResponse {
 	var directoryID *string
 	if note.DirectoryID() != "" {
@@ -318,12 +393,20 @@ func writeNoteServiceError(response http.ResponseWriter, err error, operation st
 		httpapi.WriteError(response, http.StatusConflict, "PRIVATE_NOTE_NOT_PUBLISHABLE", err.Error())
 		return true
 	}
+	if errors.Is(err, ErrPublicRestoreConfirmationRequired) {
+		httpapi.WriteError(response, http.StatusConflict, "PUBLIC_RESTORE_CONFIRMATION_REQUIRED", err.Error())
+		return true
+	}
 	if errors.Is(err, ErrNoteNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "NOTE_NOT_FOUND", "Learning Note not found")
 		return true
 	}
 	if errors.Is(err, ErrPublishedNoteNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "PUBLISHED_NOTE_NOT_FOUND", "published Learning Note not found")
+		return true
+	}
+	if errors.Is(err, ErrTrashedNoteNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "TRASHED_NOTE_NOT_FOUND", "trashed Learning Note not found")
 		return true
 	}
 	if errors.Is(err, ErrRevisionNotFound) {

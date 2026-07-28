@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,7 @@ var (
 	ErrNoteNotFound          = errors.New("Learning Note not found")
 	ErrPublishedNoteNotFound = errors.New("published Learning Note not found")
 	ErrRevisionNotFound      = errors.New("Note Revision not found")
+	ErrTrashedNoteNotFound   = errors.New("trashed Learning Note not found")
 )
 
 type NoteListFilter struct {
@@ -42,6 +44,18 @@ type PublishedNote struct {
 
 type PublishedNotePage struct {
 	Notes      []PublishedNote
+	Page       int
+	PageSize   int
+	TotalItems int
+}
+
+type TrashEntry struct {
+	Note      *Note
+	TrashedAt time.Time
+}
+
+type TrashPage struct {
+	Entries    []TrashEntry
 	Page       int
 	PageSize   int
 	TotalItems int
@@ -79,7 +93,7 @@ func (repository *PostgresRepository) CreateNote(ctx context.Context, note *Note
 }
 
 func (repository *PostgresRepository) GetNote(ctx context.Context, id string) (*Note, error) {
-	note, err := scanNote(repository.pool.QueryRow(ctx, noteSelect+` WHERE id = $1`, id))
+	note, err := scanNote(repository.pool.QueryRow(ctx, noteSelect+` WHERE id = $1 AND trashed_at IS NULL`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoteNotFound
 	}
@@ -87,6 +101,123 @@ func (repository *PostgresRepository) GetNote(ctx context.Context, id string) (*
 		return nil, fmt.Errorf("query Learning Note: %w", err)
 	}
 	return note, nil
+}
+
+func (repository *PostgresRepository) TrashNote(ctx context.Context, id string, expectedVersion int64, trashedAt time.Time) error {
+	result, err := repository.pool.Exec(ctx, `
+		UPDATE learning_notes
+		SET trashed_at = $3, updated_at = now()
+		WHERE id = $1 AND current_version = $2 AND trashed_at IS NULL
+	`, id, expectedVersion, trashedAt)
+	if err != nil {
+		return fmt.Errorf("trash Learning Note: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return repository.noteMutationMiss(ctx, id)
+	}
+	return nil
+}
+
+func (repository *PostgresRepository) ListTrash(ctx context.Context, page, pageSize int) (TrashPage, error) {
+	var totalItems int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM learning_notes WHERE trashed_at IS NOT NULL`).Scan(&totalItems); err != nil {
+		return TrashPage{}, fmt.Errorf("count trashed Learning Notes: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, trashedNoteSelect+`
+		WHERE trashed_at IS NOT NULL
+		ORDER BY trashed_at DESC, id DESC
+		LIMIT $1 OFFSET $2
+	`, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return TrashPage{}, fmt.Errorf("query trashed Learning Notes: %w", err)
+	}
+	defer rows.Close()
+	entries := make([]TrashEntry, 0, pageSize)
+	for rows.Next() {
+		entry, err := scanTrashEntry(rows)
+		if err != nil {
+			return TrashPage{}, fmt.Errorf("scan trashed Learning Note: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return TrashPage{}, fmt.Errorf("iterate trashed Learning Notes: %w", err)
+	}
+	return TrashPage{Entries: entries, Page: page, PageSize: pageSize, TotalItems: totalItems}, nil
+}
+
+func (repository *PostgresRepository) GetTrashedNote(ctx context.Context, id string) (TrashEntry, error) {
+	entry, err := scanTrashEntry(repository.pool.QueryRow(ctx, trashedNoteSelect+` WHERE id = $1 AND trashed_at IS NOT NULL`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TrashEntry{}, ErrTrashedNoteNotFound
+	}
+	if err != nil {
+		return TrashEntry{}, fmt.Errorf("query trashed Learning Note: %w", err)
+	}
+	return entry, nil
+}
+
+func (repository *PostgresRepository) RestoreFromTrash(ctx context.Context, note *Note, revision *Revision) error {
+	transaction, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin trash restore: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(context.Background()) }()
+	var directoryID any
+	if note.DirectoryID() != "" {
+		directoryID = note.DirectoryID()
+	}
+	var publishedTitle any
+	var publishedSlug any
+	var publishedMarkdown any
+	var publishedAt any
+	if note.Published() != nil {
+		publishedTitle = note.Published().Title
+		publishedSlug = note.Published().Slug
+		publishedMarkdown = note.Published().Markdown
+		publishedAt = note.Published().PublishedAt
+	}
+	result, err := transaction.Exec(ctx, `
+		UPDATE learning_notes
+		SET space_id = $2,
+			directory_id = $3,
+			published_title = $4,
+			published_slug = $5,
+			published_markdown = $6,
+			published_at = $7,
+			trashed_at = NULL,
+			updated_at = now()
+		WHERE id = $1 AND trashed_at IS NOT NULL
+	`, note.ID(), note.SpaceID(), directoryID, publishedTitle, publishedSlug, publishedMarkdown, publishedAt)
+	if err != nil {
+		return fmt.Errorf("restore Learning Note from Trash: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrTrashedNoteNotFound
+	}
+	if revision != nil {
+		if _, err := transaction.Exec(ctx, `
+			INSERT INTO note_revisions (id, note_id, title, slug, markdown, reason, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, revision.ID, revision.NoteID, revision.Title, revision.Slug, revision.Markdown, revision.Reason, revision.CreatedAt); err != nil {
+			return fmt.Errorf("insert public trash restore revision: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit trash restore: %w", err)
+	}
+	return nil
+}
+
+func (repository *PostgresRepository) DeleteTrashedNote(ctx context.Context, id string) error {
+	result, err := repository.pool.Exec(ctx, `DELETE FROM learning_notes WHERE id = $1 AND trashed_at IS NOT NULL`, id)
+	if err != nil {
+		return fmt.Errorf("permanently delete Learning Note: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrTrashedNoteNotFound
+	}
+	return nil
 }
 
 func (repository *PostgresRepository) ListNotes(ctx context.Context, filter NoteListFilter) (NotePage, error) {
@@ -374,6 +505,22 @@ const publishedNoteSelect = `
 	JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id
 `
 
+const trashedNoteSelect = `
+	SELECT id::text,
+		space_id::text,
+		COALESCE(directory_id::text, ''),
+		title,
+		slug,
+		current_markdown,
+		current_version,
+		published_title,
+		published_slug,
+		published_markdown,
+		published_at,
+		trashed_at
+	FROM learning_notes
+`
+
 type rowScanner interface {
 	Scan(...any) error
 }
@@ -408,6 +555,52 @@ func scanPublishedNote(row rowScanner) (PublishedNote, error) {
 		return PublishedNote{}, err
 	}
 	return note, nil
+}
+
+func scanTrashEntry(row rowScanner) (TrashEntry, error) {
+	var id string
+	var spaceID string
+	var directoryID string
+	var title string
+	var slug string
+	var markdown string
+	var version int64
+	var publishedTitle sql.NullString
+	var publishedSlug sql.NullString
+	var publishedMarkdown sql.NullString
+	var publishedAt sql.NullTime
+	var trashedAt time.Time
+	if err := row.Scan(
+		&id,
+		&spaceID,
+		&directoryID,
+		&title,
+		&slug,
+		&markdown,
+		&version,
+		&publishedTitle,
+		&publishedSlug,
+		&publishedMarkdown,
+		&publishedAt,
+		&trashedAt,
+	); err != nil {
+		return TrashEntry{}, err
+	}
+	note, err := NewNote(id, spaceID, directoryID, title, markdown)
+	if err != nil {
+		return TrashEntry{}, fmt.Errorf("reconstruct trashed Learning Note: %w", err)
+	}
+	note.slug = slug
+	note.version = version
+	if publishedAt.Valid {
+		note.published = &PublishedContent{
+			Title:       publishedTitle.String,
+			Slug:        publishedSlug.String,
+			Markdown:    publishedMarkdown.String,
+			PublishedAt: publishedAt.Time,
+		}
+	}
+	return TrashEntry{Note: note, TrashedAt: trashedAt}, nil
 }
 
 func nullableString(value string) any {

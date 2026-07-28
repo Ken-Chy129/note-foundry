@@ -160,4 +160,48 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if publicPage.TotalItems != 1 || len(publicPage.Notes) != 1 {
 		t.Errorf("public note page = %+v", publicPage)
 	}
+	trashedAt := publishAt.Add(3 * time.Minute)
+	if err := repository.TrashNote(ctx, note.ID(), 4, trashedAt); err != nil {
+		t.Fatalf("TrashNote() error = %v", err)
+	}
+	if _, err := repository.GetNote(ctx, note.ID()); !errors.Is(err, ErrNoteNotFound) {
+		t.Fatalf("GetNote(trashed) error = %v, want %v", err, ErrNoteNotFound)
+	}
+	if _, err := repository.GetPublishedNote(ctx, note.ID()); !errors.Is(err, ErrPublishedNoteNotFound) {
+		t.Fatalf("GetPublishedNote(trashed) error = %v, want %v", err, ErrPublishedNoteNotFound)
+	}
+	trashPage, err := repository.ListTrash(ctx, 1, 20)
+	if err != nil {
+		t.Fatalf("ListTrash() error = %v", err)
+	}
+	if trashPage.TotalItems != 1 || len(trashPage.Entries) != 1 || trashPage.Entries[0].Note.ID() != note.ID() {
+		t.Errorf("trash page = %+v", trashPage)
+	}
+	trashEntry, err := repository.GetTrashedNote(ctx, note.ID())
+	if err != nil {
+		t.Fatalf("GetTrashedNote() error = %v", err)
+	}
+	republishRevision, err := trashEntry.Note.Publish("77777777-7777-4777-8777-777777777777", publishAt.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("trash restore Publish() error = %v", err)
+	}
+	if err := repository.RestoreFromTrash(ctx, trashEntry.Note, &republishRevision); err != nil {
+		t.Fatalf("RestoreFromTrash() error = %v", err)
+	}
+	restoredFromTrash, err := repository.GetNote(ctx, note.ID())
+	if err != nil {
+		t.Fatalf("GetNote(restored from Trash) error = %v", err)
+	}
+	if restoredFromTrash.ID() != note.ID() || restoredFromTrash.Published() == nil {
+		t.Errorf("restored from Trash = %+v", restoredFromTrash)
+	}
+	if err := repository.TrashNote(ctx, note.ID(), 4, publishAt.Add(5*time.Minute)); err != nil {
+		t.Fatalf("second TrashNote() error = %v", err)
+	}
+	if err := repository.DeleteTrashedNote(ctx, note.ID()); err != nil {
+		t.Fatalf("DeleteTrashedNote() error = %v", err)
+	}
+	if _, err := repository.GetTrashedNote(ctx, note.ID()); !errors.Is(err, ErrTrashedNoteNotFound) {
+		t.Fatalf("GetTrashedNote(deleted) error = %v, want %v", err, ErrTrashedNoteNotFound)
+	}
 }
