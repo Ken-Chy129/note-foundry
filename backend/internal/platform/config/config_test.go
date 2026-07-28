@@ -23,6 +23,9 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	if config.SecureCookies {
 		t.Error("SecureCookies = true in development, want false")
 	}
+	if config.AttachmentsDirectory != "./data/attachments" {
+		t.Errorf("AttachmentsDirectory = %q", config.AttachmentsDirectory)
+	}
 }
 
 func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
@@ -47,6 +50,7 @@ func TestLoadTrimsConfiguredValues(t *testing.T) {
 	values["HTTP_ADDR"] = " 127.0.0.1:9090 "
 	values["DATABASE_URL"] = " postgres://notefoundry@db/notefoundry "
 	values["PUBLIC_URL"] = " https://notes.test/ "
+	values["ATTACHMENTS_DIR"] = " /srv/notefoundry/attachments "
 	config, err := Load(mapLookup(values))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -66,6 +70,9 @@ func TestLoadTrimsConfiguredValues(t *testing.T) {
 	}
 	if !config.SecureCookies {
 		t.Error("SecureCookies = false in production, want true")
+	}
+	if config.AttachmentsDirectory != "/srv/notefoundry/attachments" {
+		t.Errorf("AttachmentsDirectory = %q", config.AttachmentsDirectory)
 	}
 }
 

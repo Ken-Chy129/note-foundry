@@ -48,24 +48,30 @@ type SearchProjector interface {
 	ProjectPublishedNote(context.Context, string, string, string) error
 }
 
+type AttachmentProjector interface {
+	ReplacePublishedNoteAttachments(context.Context, string, []string, time.Time) error
+}
+
 type IDGenerator func() string
 
 type ServiceConfig struct {
-	Notes      Repository
-	Knowledge  KnowledgeCatalog
-	GenerateID IDGenerator
-	Now        func() time.Time
-	Links      LinkProjector
-	Search     SearchProjector
+	Notes       Repository
+	Knowledge   KnowledgeCatalog
+	GenerateID  IDGenerator
+	Now         func() time.Time
+	Links       LinkProjector
+	Search      SearchProjector
+	Attachments AttachmentProjector
 }
 
 type Service struct {
-	notes      Repository
-	knowledge  KnowledgeCatalog
-	generateID IDGenerator
-	now        func() time.Time
-	links      LinkProjector
-	search     SearchProjector
+	notes       Repository
+	knowledge   KnowledgeCatalog
+	generateID  IDGenerator
+	now         func() time.Time
+	links       LinkProjector
+	search      SearchProjector
+	attachments AttachmentProjector
 }
 
 type RestoreTrashInput struct {
@@ -77,12 +83,13 @@ type RestoreTrashInput struct {
 
 func NewService(config ServiceConfig) *Service {
 	return &Service{
-		notes:      config.Notes,
-		knowledge:  config.Knowledge,
-		generateID: config.GenerateID,
-		now:        config.Now,
-		links:      config.Links,
-		search:     config.Search,
+		notes:       config.Notes,
+		knowledge:   config.Knowledge,
+		generateID:  config.GenerateID,
+		now:         config.Now,
+		links:       config.Links,
+		search:      config.Search,
+		attachments: config.Attachments,
 	}
 }
 
@@ -195,6 +202,9 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 		return nil, err
 	}
 	if err := service.projectPublishedSearch(ctx, note); err != nil {
+		return nil, err
+	}
+	if err := service.publishAttachments(ctx, note); err != nil {
 		return nil, err
 	}
 	return note, nil
@@ -326,6 +336,9 @@ func (service *Service) RestoreFromTrash(ctx context.Context, id string, input R
 		if err := service.projectPublishedSearch(ctx, entry.Note); err != nil {
 			return nil, err
 		}
+		if err := service.publishAttachments(ctx, entry.Note); err != nil {
+			return nil, err
+		}
 	}
 	return entry.Note, nil
 }
@@ -373,6 +386,16 @@ func (service *Service) projectPublishedSearch(ctx context.Context, note *Note) 
 	}
 	if err := service.search.ProjectPublishedNote(ctx, note.ID(), note.Published().Title, note.Published().Markdown); err != nil {
 		return fmt.Errorf("project published Learning Note search: %w", err)
+	}
+	return nil
+}
+
+func (service *Service) publishAttachments(ctx context.Context, note *Note) error {
+	if service.attachments == nil || note.Published() == nil {
+		return nil
+	}
+	if err := service.attachments.ReplacePublishedNoteAttachments(ctx, note.ID(), ExtractAttachmentTargets(note.Published().Markdown), note.Published().PublishedAt); err != nil {
+		return fmt.Errorf("publish Learning Note attachments: %w", err)
 	}
 	return nil
 }

@@ -200,15 +200,17 @@ func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing
 	repository := &noteRepositoryStub{}
 	projector := &linkProjectorStub{}
 	searchProjector := &searchProjectorStub{}
+	attachmentProjector := &attachmentProjectorStub{}
 	service := NewService(ServiceConfig{
-		Notes:      repository,
-		Knowledge:  &knowledgeCatalogStub{space: space},
-		GenerateID: idSequence("33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"),
-		Now:        time.Now,
-		Links:      projector,
-		Search:     searchProjector,
+		Notes:       repository,
+		Knowledge:   &knowledgeCatalogStub{space: space},
+		GenerateID:  idSequence("33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"),
+		Now:         time.Now,
+		Links:       projector,
+		Search:      searchProjector,
+		Attachments: attachmentProjector,
 	})
-	note, err := service.CreateNote(context.Background(), space.ID(), "", "Agent Loop", `[Memory](note:22222222-2222-4222-8222-222222222222)`)
+	note, err := service.CreateNote(context.Background(), space.ID(), "", "Agent Loop", "[Memory](note:22222222-2222-4222-8222-222222222222)\n\n![diagram](attachment:55555555-5555-4555-8555-555555555555)")
 	if err != nil {
 		t.Fatalf("CreateNote() error = %v", err)
 	}
@@ -227,6 +229,9 @@ func TestServiceProjectsCurrentAndPublishedLinksFromCanonicalMarkdown(t *testing
 	}
 	if searchProjector.publishedMarkdown != note.Published().Markdown {
 		t.Errorf("published search Markdown = %q", searchProjector.publishedMarkdown)
+	}
+	if len(attachmentProjector.publishedIDs) != 1 || attachmentProjector.publishedIDs[0] != "55555555-5555-4555-8555-555555555555" {
+		t.Errorf("published Attachment ids = %+v", attachmentProjector.publishedIDs)
 	}
 }
 
@@ -342,6 +347,15 @@ type linkProjectorStub struct {
 type searchProjectorStub struct {
 	currentMarkdown   string
 	publishedMarkdown string
+}
+
+type attachmentProjectorStub struct {
+	publishedIDs []string
+}
+
+func (projector *attachmentProjectorStub) ReplacePublishedNoteAttachments(_ context.Context, _ string, ids []string, _ time.Time) error {
+	projector.publishedIDs = ids
+	return nil
 }
 
 func (projector *searchProjectorStub) ProjectCurrentNote(_ context.Context, _, _, markdown string) error {

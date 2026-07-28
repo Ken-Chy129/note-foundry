@@ -13,3 +13,11 @@ func TestExtractNoteLinkTargetsUsesStableNoteURIsAndDeduplicates(t *testing.T) {
 		t.Errorf("targets = %+v", targets)
 	}
 }
+
+func TestExtractAttachmentTargetsUsesStableAttachmentURI(t *testing.T) {
+	markdown := `![diagram](attachment:33333333-3333-4333-8333-333333333333)`
+	targets := ExtractAttachmentTargets(markdown)
+	if len(targets) != 1 || targets[0] != "33333333-3333-4333-8333-333333333333" {
+		t.Errorf("targets = %+v", targets)
+	}
+}

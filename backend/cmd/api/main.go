@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Ken-Chy129/note-foundry/backend/internal/attachments"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/identity"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/knowledge"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/notes"
@@ -53,6 +54,13 @@ func main() {
 	searchRepository := searchmodule.NewPostgresRepository(pool)
 	searchService := searchmodule.NewService(searchRepository)
 	searchHTTP := searchmodule.NewHTTPHandler(searchService, identityHTTP.RequireOwner)
+	attachmentStorage, err := attachments.NewLocalStorage(runtimeConfig.AttachmentsDirectory)
+	if err != nil {
+		log.Fatal(err)
+	}
+	attachmentRepository := attachments.NewPostgresRepository(pool)
+	attachmentService := attachments.NewService(attachmentRepository, attachmentStorage, uuid.NewString, time.Now)
+	attachmentHTTP := attachments.NewHTTPHandler(attachmentService, identityHTTP.RequireOwner)
 	knowledgeService := knowledge.NewService(knowledge.ServiceConfig{
 		Spaces:      knowledgeRepository,
 		Directories: knowledgeRepository,
@@ -64,18 +72,19 @@ func main() {
 	knowledgeHTTP := knowledge.NewHTTPHandler(knowledgeService, identityHTTP.RequireOwner)
 	notesRepository := notes.NewPostgresRepository(pool)
 	notesService := notes.NewService(notes.ServiceConfig{
-		Notes:      notesRepository,
-		Knowledge:  knowledgeService,
-		GenerateID: uuid.NewString,
-		Now:        time.Now,
-		Links:      knowledgeService,
-		Search:     searchService,
+		Notes:       notesRepository,
+		Knowledge:   knowledgeService,
+		GenerateID:  uuid.NewString,
+		Now:         time.Now,
+		Links:       knowledgeService,
+		Search:      searchService,
+		Attachments: attachmentService,
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP, searchHTTP), runtimeConfig.SecureCookies),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP, searchHTTP, attachmentHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

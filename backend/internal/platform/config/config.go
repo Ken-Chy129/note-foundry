@@ -27,14 +27,15 @@ const (
 )
 
 type Config struct {
-	Environment        Environment
-	HTTPAddress        string
-	DatabaseURL        string
-	PublicURL          string
-	GitHubClientID     string
-	GitHubClientSecret string
-	GitHubOwnerID      int64
-	SecureCookies      bool
+	Environment          Environment
+	HTTPAddress          string
+	DatabaseURL          string
+	PublicURL            string
+	GitHubClientID       string
+	GitHubClientSecret   string
+	GitHubOwnerID        int64
+	SecureCookies        bool
+	AttachmentsDirectory string
 }
 
 type LookupEnv func(string) (string, bool)
@@ -75,14 +76,15 @@ func Load(lookup LookupEnv) (Config, error) {
 	}
 
 	return Config{
-		Environment:        environment,
-		HTTPAddress:        valueOrDefault(lookup, "HTTP_ADDR", ":8080"),
-		DatabaseURL:        databaseURL,
-		PublicURL:          publicURL,
-		GitHubClientID:     githubClientID,
-		GitHubClientSecret: githubClientSecret,
-		GitHubOwnerID:      githubOwnerID,
-		SecureCookies:      environment == EnvironmentProduction,
+		Environment:          environment,
+		HTTPAddress:          valueOrDefault(lookup, "HTTP_ADDR", ":8080"),
+		DatabaseURL:          databaseURL,
+		PublicURL:            publicURL,
+		GitHubClientID:       githubClientID,
+		GitHubClientSecret:   githubClientSecret,
+		GitHubOwnerID:        githubOwnerID,
+		SecureCookies:        environment == EnvironmentProduction,
+		AttachmentsDirectory: valueOrDefault(lookup, "ATTACHMENTS_DIR", "./data/attachments"),
 	}, nil
 }
 

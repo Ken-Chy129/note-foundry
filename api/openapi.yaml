@@ -992,6 +992,106 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/attachments:
+    get:
+      operationId: listLearningNoteAttachments
+      summary: List managed Attachments owned by a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note Attachments including private draft files.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: uploadLearningNoteAttachment
+      summary: Upload an Attachment that remains private until referenced Published Content is published
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment stored using an immutable storage key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/attachments/{attachmentId}:
+    get:
+      operationId: downloadOwnerAttachment
+      summary: Download an Attachment as the Knowledge Owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/AttachmentId"
+      responses:
+        "200":
+          description: Attachment binary content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/attachments/{attachmentId}:
+    get:
+      operationId: downloadPublicAttachment
+      summary: Download only an Attachment referenced by Published Content in a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/AttachmentId"
+      responses:
+        "200":
+          description: Public Attachment binary content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth
@@ -1158,6 +1258,13 @@ components:
         format: uuid
     RevisionId:
       name: revisionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AttachmentId:
+      name: attachmentId
       in: path
       required: true
       schema:
@@ -1607,6 +1714,53 @@ components:
             $ref: "#/components/schemas/SearchResult"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    Attachment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - noteId
+        - originalName
+        - mediaType
+        - sizeBytes
+        - sha256
+        - publishedAt
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        noteId:
+          type: string
+          format: uuid
+        originalName:
+          type: string
+        mediaType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        publishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    AttachmentDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
     CreateLearningNoteRequest:
       type: object
       additionalProperties: false
