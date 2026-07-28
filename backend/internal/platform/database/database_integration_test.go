@@ -25,6 +25,14 @@ func TestApplyMigrationsIsRepeatable(t *testing.T) {
 	if err := ApplyMigrations(ctx, pool); err != nil {
 		t.Fatalf("first ApplyMigrations() error = %v", err)
 	}
+	var firstAppliedCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&firstAppliedCount); err != nil {
+		t.Fatalf("count schema migrations after first apply: %v", err)
+	}
+	if firstAppliedCount == 0 {
+		t.Fatal("no schema migrations were applied")
+	}
+
 	if err := ApplyMigrations(ctx, pool); err != nil {
 		t.Fatalf("second ApplyMigrations() error = %v", err)
 	}
@@ -45,7 +53,7 @@ func TestApplyMigrationsIsRepeatable(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&appliedCount); err != nil {
 		t.Fatalf("count schema migrations: %v", err)
 	}
-	if appliedCount != 1 {
-		t.Errorf("schema migration count = %d, want 1", appliedCount)
+	if appliedCount != firstAppliedCount {
+		t.Errorf("schema migration count after second apply = %d, want %d", appliedCount, firstAppliedCount)
 	}
 }
