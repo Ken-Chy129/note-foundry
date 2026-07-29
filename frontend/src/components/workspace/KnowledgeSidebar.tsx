@@ -18,17 +18,17 @@ interface KnowledgeSidebarProps {
 }
 
 function notePath(note: LearningNote, directories: Directory[]): string {
-  if (!note.directoryId) return "Root";
-  return directories.find((directory) => directory.id === note.directoryId)?.name ?? "Directory";
+  if (!note.directoryId) return "根目录";
+  return directories.find((directory) => directory.id === note.directoryId)?.name ?? "目录";
 }
 
 export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
   return (
-    <aside className="workspace-sidebar" aria-label="Knowledge navigation">
+    <aside className="workspace-sidebar" aria-label="知识导航">
       <div className="workspace-brand"><span>NF</span><strong>NoteFoundry</strong></div>
       <div className="sidebar-heading">
-        <span>Knowledge spaces</span>
-        <button className="icon-button" onClick={props.onCreateSpace} aria-label="Create Knowledge Space"><Plus size={17} /></button>
+        <span>知识空间</span>
+        <button className="icon-button" onClick={props.onCreateSpace} aria-label="创建知识空间"><Plus size={17} /></button>
       </div>
       <div className="space-switcher" role="list">
         {props.spaces.map((space) => (
@@ -46,14 +46,14 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
       </div>
 
       <div className="sidebar-heading sidebar-heading-notes">
-        <span>Learning notes</span>
+        <span>学习笔记</span>
         <div>
-          <button className="icon-button" onClick={props.onCreateDirectory} aria-label="Create directory" disabled={!props.selectedSpaceId}><FolderPlus size={16} /></button>
-          <button className="icon-button" onClick={props.onCreateNote} aria-label="Create Learning Note" disabled={!props.selectedSpaceId}><Plus size={17} /></button>
+          <button className="icon-button" onClick={props.onCreateDirectory} aria-label="创建目录" disabled={!props.selectedSpaceId}><FolderPlus size={16} /></button>
+          <button className="icon-button" onClick={props.onCreateNote} aria-label="创建学习笔记" disabled={!props.selectedSpaceId}><Plus size={17} /></button>
         </div>
       </div>
       <div className="note-navigation" role="list">
-        {props.notes.length === 0 && <p className="sidebar-empty">Create the first note in this space.</p>}
+        {props.notes.length === 0 && <p className="sidebar-empty">在这个空间中创建第一篇学习笔记。</p>}
         {props.notes.map((note) => (
           <button
             role="listitem"
@@ -63,11 +63,11 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
           >
             <BookOpen size={15} />
             <span><strong>{note.title}</strong><small>{notePath(note, props.directories)}</small></span>
-            {note.published && <i title="Published" />}
+            {note.published && <i title="已发布" />}
           </button>
         ))}
       </div>
-      <button className="trash-link" onClick={props.onOpenTrash}><Trash2 size={15} /> Trash</button>
+      <button className="trash-link" onClick={props.onOpenTrash}><Trash2 size={15} /> 回收站</button>
     </aside>
   );
 }

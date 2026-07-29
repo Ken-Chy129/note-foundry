@@ -6,15 +6,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "NoteFoundry — Personal learning workspace",
+    default: "NoteFoundry — 个人学习工作台",
     template: "%s — NoteFoundry"
   },
-  description: "A single-owner workspace for dependable learning notes."
+  description: "面向单一知识所有者的可靠学习笔记工作台。"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body>{children}</body>
     </html>
   );

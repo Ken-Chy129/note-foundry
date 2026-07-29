@@ -33,24 +33,24 @@ export function PublicSearch() {
 
   return (
     <section className="public-search" aria-labelledby="search-title">
-      <div className="section-kicker">Bilingual retrieval</div>
-      <h2 id="search-title">Search what has been learned</h2>
+      <div className="section-kicker">中英文检索</div>
+      <h2 id="search-title">搜索已沉淀的知识</h2>
       <form onSubmit={submit} role="search">
         <Search aria-hidden="true" size={20} />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Try “memory”, “上下文”, or “Agent Loop”"
-          aria-label="Search published notes"
+          placeholder="试试“memory”“上下文”或“Agent Loop”"
+          aria-label="搜索已发布的学习笔记"
         />
-        {query && <button type="button" className="icon-button" onClick={clear} aria-label="Clear search"><X size={18} /></button>}
+        {query && <button type="button" className="icon-button" onClick={clear} aria-label="清空搜索"><X size={18} /></button>}
         <button className="button button-primary" type="submit" disabled={state === "loading"}>
-          {state === "loading" ? "Searching…" : "Search"}
+          {state === "loading" ? "搜索中…" : "搜索"}
         </button>
       </form>
       <div className="search-results" aria-live="polite">
-        {state === "error" && <p className="inline-error">Search is unavailable. Try again in a moment.</p>}
-        {state === "ready" && results.length === 0 && <p className="empty-copy">No published notes match this phrase.</p>}
+        {state === "error" && <p className="inline-error">暂时无法搜索，请稍后重试。</p>}
+        {state === "ready" && results.length === 0 && <p className="empty-copy">没有匹配该关键词的已发布笔记。</p>}
         {results.map((result) => (
           <Link className="search-result" key={result.id} href={`/notes/${result.id}/${result.slug}`}>
             <span>{result.title}</span>

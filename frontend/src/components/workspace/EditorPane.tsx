@@ -52,9 +52,9 @@ export function EditorPane({ note, onAutosave, onPublish, onTrash, onNoteChange 
     return (
       <section className="editor-empty">
         <span className="empty-spine" />
-        <p className="section-kicker">Owner workspace</p>
-        <h1>Select a Learning Note</h1>
-        <p>Choose a note from the knowledge tree, or create a new one. Autosave begins as soon as you write.</p>
+        <p className="section-kicker">所有者工作区</p>
+        <h1>选择一篇学习笔记</h1>
+        <p>从左侧知识树选择一篇笔记，或创建新笔记。开始输入后，系统会自动保存。</p>
       </section>
     );
   }
@@ -68,7 +68,7 @@ export function EditorPane({ note, onAutosave, onPublish, onTrash, onNoteChange 
 
   async function trash() {
     if (!note) return;
-    if (!window.confirm(`Move “${title}” to Trash? Its stable identity and history will be preserved.`)) return;
+    if (!window.confirm(`将《${title}》移入回收站吗？笔记的稳定身份与历史记录会保留。`)) return;
     await onTrash(note.id, versionRef.current);
   }
 
@@ -77,21 +77,21 @@ export function EditorPane({ note, onAutosave, onPublish, onTrash, onNoteChange 
       <header className="editor-toolbar">
         <div className={`save-indicator save-${saveState}`} aria-live="polite">
           {saveState === "saving" ? <Save size={14} /> : <Check size={14} />}
-          {saveState === "saved" ? "Saved" : saveState === "dirty" ? "Unsaved changes" : saveState === "saving" ? "Saving…" : saveState === "conflict" ? "Save conflict — reload" : "Save failed"}
+          {saveState === "saved" ? "已保存" : saveState === "dirty" ? "有未保存更改" : saveState === "saving" ? "保存中…" : saveState === "conflict" ? "保存冲突，请刷新页面" : "保存失败"}
         </div>
-        <div className="view-switcher" aria-label="Editor view">
-          <button className={mode === "edit" ? "is-active" : ""} onClick={() => setMode("edit")}>Edit</button>
-          <button className={mode === "split" ? "is-active" : ""} onClick={() => setMode("split")} aria-label="Split editor and preview"><Columns2 size={15} /></button>
-          <button className={mode === "preview" ? "is-active" : ""} onClick={() => setMode("preview")} aria-label="Preview"><Eye size={15} /></button>
+        <div className="view-switcher" aria-label="编辑器视图">
+          <button className={mode === "edit" ? "is-active" : ""} onClick={() => setMode("edit")}>编辑</button>
+          <button className={mode === "split" ? "is-active" : ""} onClick={() => setMode("split")} aria-label="并排显示编辑器和预览"><Columns2 size={15} /></button>
+          <button className={mode === "preview" ? "is-active" : ""} onClick={() => setMode("preview")} aria-label="预览"><Eye size={15} /></button>
         </div>
-        <button className="button button-quiet toolbar-trash" onClick={trash}><Trash2 size={15} /> Trash</button>
-        <button className="button button-primary" onClick={() => void publish()} disabled={saveState === "saving" || saveState === "conflict"}><Send size={15} /> Publish</button>
+        <button className="button button-quiet toolbar-trash" onClick={trash}><Trash2 size={15} /> 移入回收站</button>
+        <button className="button button-primary" onClick={() => void publish()} disabled={saveState === "saving" || saveState === "conflict"}><Send size={15} /> 发布</button>
       </header>
       <input
         className="note-title-input"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        aria-label="Learning Note title"
+        aria-label="学习笔记标题"
       />
       <div className={`editor-grid mode-${mode}`}>
         {mode !== "preview" && (
@@ -100,11 +100,11 @@ export function EditorPane({ note, onAutosave, onPublish, onTrash, onNoteChange 
             value={markdown}
             onChange={(event) => setMarkdown(event.target.value)}
             spellCheck
-            aria-label="Canonical Markdown editor"
+            aria-label="规范 Markdown 编辑器"
           />
         )}
         {mode !== "edit" && (
-          <div className="editor-preview" aria-label="Markdown preview">
+          <div className="editor-preview" aria-label="Markdown 预览">
             <MarkdownRenderer markdown={markdown} attachmentScope="owner" />
           </div>
         )}

@@ -9,7 +9,7 @@ export function WorkspaceDialog({ title, description, children, onClose }: { tit
       <section className="workspace-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
         <header>
           <div><h2 id="dialog-title">{title}</h2>{description && <p>{description}</p>}</div>
-          <button className="icon-button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
+          <button className="icon-button" onClick={onClose} aria-label="关闭对话框"><X size={18} /></button>
         </header>
         {children}
       </section>

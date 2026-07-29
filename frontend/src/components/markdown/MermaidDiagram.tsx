@@ -21,7 +21,7 @@ export function MermaidDiagram({ source }: { source: string }) {
         }
       } catch {
         if (!cancelled) {
-          setError("Mermaid diagram could not be rendered.");
+          setError("无法渲染 Mermaid 图表。");
         }
       }
     };
@@ -35,7 +35,7 @@ export function MermaidDiagram({ source }: { source: string }) {
     return <pre className="markdown-diagram-error">{error}{"\n"}{source}</pre>;
   }
   if (!svg) {
-    return <div className="markdown-diagram-loading" aria-label="Rendering diagram" />;
+    return <div className="markdown-diagram-loading" aria-label="正在渲染图表" />;
   }
   return <div className="markdown-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
