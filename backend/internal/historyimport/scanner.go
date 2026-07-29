@@ -30,6 +30,7 @@ type IssueCode string
 
 const (
 	IssueMissingAsset      IssueCode = "missing_asset"
+	IssueEmptyDocument     IssueCode = "empty_document"
 	IssueUnsupportedSource IssueCode = "unsupported_source"
 	IssueUnreadableEntry   IssueCode = "unreadable_entry"
 )
