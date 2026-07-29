@@ -433,6 +433,36 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setLearningNoteTags
+      summary: Replace the complete global Tag set for a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNoteTagsRequest"
+      responses:
+        "200":
+          description: Updated Learning Note Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagDataResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/notes/{noteId}/links:
     get:
       operationId: listCurrentNoteLinks
@@ -473,36 +503,6 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/InternalError"
-    put:
-      operationId: setLearningNoteTags
-      summary: Replace the complete global Tag set for a Learning Note
-      security:
-        - ownerSession: []
-      parameters:
-        - $ref: "#/components/parameters/NoteId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SetNoteTagsRequest"
-      responses:
-        "200":
-          description: Updated Learning Note Tags.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TagDataResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "413":
-          $ref: "#/components/responses/RequestTooLarge"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/notes:

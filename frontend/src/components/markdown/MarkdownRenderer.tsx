@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -12,9 +12,19 @@ interface MarkdownRendererProps {
   attachmentScope?: "owner" | "public";
 }
 
+const stableIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function stableTarget(value: string | undefined, scheme: string): string | null {
   if (!value?.startsWith(`${scheme}:`)) return null;
-  return value.slice(scheme.length + 1);
+  const target = value.slice(scheme.length + 1);
+  return stableIdPattern.test(target) ? target.toLowerCase() : null;
+}
+
+function noteFoundryUrlTransform(value: string): string {
+  if (stableTarget(value, "note") || stableTarget(value, "attachment")) {
+    return value;
+  }
+  return defaultUrlTransform(value);
 }
 
 export function MarkdownRenderer({ markdown, attachmentScope = "public" }: MarkdownRendererProps) {
@@ -23,6 +33,7 @@ export function MarkdownRenderer({ markdown, attachmentScope = "public" }: Markd
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        urlTransform={noteFoundryUrlTransform}
         components={{
           h1({ children }) {
             return <h2>{children}</h2>;

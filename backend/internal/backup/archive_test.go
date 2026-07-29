@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,38 @@ func TestRestoreRejectsWrongPassphraseWithoutChangingAttachments(t *testing.T) {
 	}
 	if contents, readErr := os.ReadFile(filepath.Join(target, "keep.txt")); readErr != nil || string(contents) != "keep" {
 		t.Fatalf("existing Attachment changed: %q, %v", contents, readErr)
+	}
+}
+
+func TestPostgresConnectionRemovesPasswordFromCommandArgument(t *testing.T) {
+	connection, environment, err := postgresConnection("postgres://owner:very-secret@postgres:5432/notefoundry?sslmode=disable")
+	if err != nil {
+		t.Fatalf("postgresConnection() error = %v", err)
+	}
+	if strings.Contains(connection, "very-secret") || connection != "postgres://owner@postgres:5432/notefoundry?sslmode=disable" {
+		t.Errorf("sanitized connection = %q", connection)
+	}
+	var passwordFound bool
+	for _, value := range environment {
+		if value == "PGPASSWORD=very-secret" {
+			passwordFound = true
+		}
+	}
+	if !passwordFound {
+		t.Error("PGPASSWORD was not added to the command environment")
+	}
+}
+
+func TestPostgresConnectionRemovesQueryPasswordWithoutRequiringAUsername(t *testing.T) {
+	connection, environment, err := postgresConnection("postgresql://postgres:5432/notefoundry?sslmode=disable&password=query-secret")
+	if err != nil {
+		t.Fatalf("postgresConnection() error = %v", err)
+	}
+	if strings.Contains(connection, "query-secret") || strings.Contains(connection, "password=") {
+		t.Errorf("sanitized connection = %q", connection)
+	}
+	if !slices.Contains(environment, "PGPASSWORD=query-secret") {
+		t.Error("query password was not added to the command environment")
 	}
 }
 
