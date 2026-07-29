@@ -33,18 +33,19 @@ export function PublicSearch() {
 
   return (
     <section className="public-search" aria-labelledby="search-title">
-      <div className="section-kicker">中英文检索</div>
-      <h2 id="search-title">搜索学习笔记</h2>
+      <h2 id="search-title">搜索公开笔记</h2>
       <form onSubmit={submit} role="search">
-        <Search aria-hidden="true" size={20} />
+        <Search aria-hidden="true" size={19} />
         <input
+          id="public-note-search"
+          type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="输入中文或英文关键词"
+          placeholder="输入关键词"
           aria-label="搜索已发布的学习笔记"
         />
         {query && <button type="button" className="icon-button" onClick={clear} aria-label="清空搜索"><X size={18} /></button>}
-        <button className="button button-primary" type="submit" disabled={state === "loading"}>
+        <button className="search-submit" type="submit" disabled={state === "loading"}>
           {state === "loading" ? "搜索中…" : "搜索"}
         </button>
       </form>

@@ -7,9 +7,6 @@ export function SiteHeader() {
         <span className="wordmark-mark">NF</span>
         <span>NoteFoundry</span>
       </Link>
-      <nav aria-label="主导航">
-        <Link href="/#spaces">浏览知识空间</Link>
-      </nav>
     </header>
   );
 }
