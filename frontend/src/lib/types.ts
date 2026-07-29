@@ -1,0 +1,106 @@
+export type Visibility = "private" | "public";
+
+export interface KnowledgeSpace {
+  id: string;
+  name: string;
+  visibility: Visibility;
+}
+
+export interface Directory {
+  id: string;
+  spaceId: string;
+  parentId: string | null;
+  name: string;
+}
+
+export interface PublishedContent {
+  title: string;
+  slug: string;
+  markdown: string;
+  publishedAt: string;
+}
+
+export interface LearningNote {
+  id: string;
+  spaceId: string;
+  directoryId: string | null;
+  title: string;
+  slug: string;
+  markdown: string;
+  version: number;
+  published: PublishedContent | null;
+}
+
+export interface PublishedNote {
+  id: string;
+  spaceId: string;
+  directoryId: string | null;
+  title: string;
+  slug: string;
+  markdown: string;
+  publishedAt: string;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+}
+
+export interface LinkedNote {
+  id: string;
+  spaceId: string;
+  title: string;
+  slug: string;
+}
+
+export interface Attachment {
+  id: string;
+  noteId: string;
+  originalName: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+export interface SearchResult {
+  id: string;
+  spaceId: string;
+  title: string;
+  slug: string;
+  snippet: string;
+  rank: number;
+}
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface PageResponse<T> {
+  data: T[];
+  pagination: Pagination;
+}
+
+export interface DataResponse<T> {
+  data: T[];
+}
+
+export interface SessionResponse {
+  owner: {
+    githubUserId: number;
+    login: string;
+    avatarUrl: string;
+  };
+  expiresAt: string;
+}
+
+export interface APIErrorBody {
+  error: {
+    code: string;
+    message: string;
+  };
+}

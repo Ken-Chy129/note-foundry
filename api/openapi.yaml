@@ -1,0 +1,1968 @@
+openapi: 3.1.0
+info:
+  title: NoteFoundry API
+  version: 0.1.0
+  description: REST interface for the single-owner NoteFoundry learning workspace.
+servers:
+  - url: /
+paths:
+  /auth/github/start:
+    get:
+      operationId: startGitHubLogin
+      summary: Start Knowledge Owner authentication through GitHub
+      responses:
+        "302":
+          description: Redirect to GitHub OAuth authorization.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /auth/github/callback:
+    get:
+      operationId: completeGitHubLogin
+      summary: Complete GitHub OAuth authentication
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Owner session created; redirect to the management application.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: GitHub authentication failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      operationId: logoutOwner
+      summary: End the current owner session
+      security:
+        - ownerSession: []
+      responses:
+        "204":
+          description: Session ended or already absent.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/session:
+    get:
+      operationId: getOwnerSession
+      summary: Return the authenticated Knowledge Owner session
+      security:
+        - ownerSession: []
+      responses:
+        "200":
+          description: Current owner session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnerSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/spaces:
+    get:
+      operationId: listKnowledgeSpaces
+      summary: List Knowledge Spaces for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Knowledge Spaces.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpaceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createKnowledgeSpace
+      summary: Create a flat top-level Knowledge Space
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKnowledgeSpaceRequest"
+      responses:
+        "201":
+          description: Knowledge Space created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpace"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/spaces/{spaceId}:
+    patch:
+      operationId: renameKnowledgeSpace
+      summary: Rename a Knowledge Space without changing its identity
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameKnowledgeSpaceRequest"
+      responses:
+        "200":
+          description: Knowledge Space renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpace"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/spaces/{spaceId}/directories:
+    get:
+      operationId: listDirectories
+      summary: Return the complete Directory hierarchy for a Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      responses:
+        "200":
+          description: Flat Directory records that can be assembled into a tree by parent ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createDirectory
+      summary: Create a root or nested Directory in a Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectoryRequest"
+      responses:
+        "201":
+          description: Directory created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/directories/{directoryId}:
+    patch:
+      operationId: renameDirectory
+      summary: Rename a Directory without changing its identity or location
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/DirectoryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDirectoryRequest"
+      responses:
+        "200":
+          description: Directory renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/directories/{directoryId}/move:
+    post:
+      operationId: moveDirectory
+      summary: Move a Directory to another parent in the same Knowledge Space
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/DirectoryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDirectoryRequest"
+      responses:
+        "200":
+          description: Directory moved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Directory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/tags:
+    get:
+      operationId: listTags
+      summary: List global flat Tags
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createTag
+      summary: Create a global flat Tag
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagWriteRequest"
+      responses:
+        "201":
+          description: Tag created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/tags/{tagId}:
+    patch:
+      operationId: renameTag
+      summary: Rename a global Tag without changing its identity
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/TagId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagWriteRequest"
+      responses:
+        "200":
+          description: Tag renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/tags/{tagId}/merge:
+    post:
+      operationId: mergeTag
+      summary: Merge a global Tag into another while preserving all Note associations
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/TagId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeTagRequest"
+      responses:
+        "200":
+          description: Source Tag merged and target Tag returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/tags:
+    get:
+      operationId: listLearningNoteTags
+      summary: List global Tags attached to a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setLearningNoteTags
+      summary: Replace the complete global Tag set for a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNoteTagsRequest"
+      responses:
+        "200":
+          description: Updated Learning Note Tags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagDataResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/links:
+    get:
+      operationId: listCurrentNoteLinks
+      summary: List forward Note Links derived from the current canonical Markdown
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Current forward Note Links.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/backlinks:
+    get:
+      operationId: listCurrentNoteBacklinks
+      summary: List backlinks automatically derived from other current Note Markdown
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Current derived backlinks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes:
+    get:
+      operationId: listLearningNotes
+      summary: List current Learning Note drafts for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/DirectoryIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated current Learning Notes including owner-only drafts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNoteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createLearningNote
+      summary: Create a Learning Note draft with stable identity
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLearningNoteRequest"
+      responses:
+        "201":
+          description: Learning Note draft created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}:
+    get:
+      operationId: getLearningNote
+      summary: Get the current owner draft and Published Content snapshot
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: autosaveLearningNote
+      summary: Autosave a Learning Note draft using optimistic concurrency
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutosaveLearningNoteRequest"
+      responses:
+        "200":
+          description: Learning Note draft saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/publish:
+    post:
+      operationId: publishLearningNote
+      summary: Explicitly replace Published Content from the reviewed current draft
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishLearningNoteRequest"
+      responses:
+        "200":
+          description: Published Content replaced and a Note Revision recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/move:
+    post:
+      operationId: moveLearningNote
+      summary: Move a Learning Note without changing identity; private-to-public moves publish atomically after confirmation
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveLearningNoteRequest"
+      responses:
+        "200":
+          description: Learning Note moved, with publication included when required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/revisions:
+    get:
+      operationId: listNoteRevisions
+      summary: List private recoverable Note Revisions
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Note Revisions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteRevisionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createNoteRevisionCheckpoint
+      summary: Create a manual recoverable checkpoint of the current draft
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "201":
+          description: Manual Note Revision created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteRevision"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/revisions/{revisionId}/restore:
+    post:
+      operationId: restoreNoteRevision
+      summary: Restore a Note Revision into the current draft while preserving Published Content
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+        - $ref: "#/components/parameters/RevisionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "200":
+          description: Revision restored and the pre-restore draft checkpointed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/trash:
+    post:
+      operationId: trashLearningNote
+      summary: Move a Learning Note to Trash without changing its stable identity
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedNoteCommandRequest"
+      responses:
+        "204":
+          description: Learning Note moved to Trash.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes:
+    get:
+      operationId: listTrashedLearningNotes
+      summary: List Learning Notes in non-expiring Trash
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated trashed Learning Notes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashNoteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes/{noteId}/restore:
+    post:
+      operationId: restoreLearningNoteFromTrash
+      summary: Restore the original Note identity, optionally selecting a new location
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreTrashNoteRequest"
+      responses:
+        "200":
+          description: Learning Note restored. Public targets are published in the same confirmed action.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningNote"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/trash/notes/{noteId}:
+    delete:
+      operationId: permanentlyDeleteLearningNote
+      summary: Explicitly and permanently delete a Learning Note already in Trash
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "204":
+          description: Learning Note permanently deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces/{spaceId}/notes:
+    get:
+      operationId: listPublishedLearningNotes
+      summary: List only Published Content in a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated Published Content without owner drafts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedLearningNoteListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces:
+    get:
+      operationId: listPublicKnowledgeSpaces
+      summary: List Knowledge Spaces visible to anonymous readers
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated public Knowledge Spaces only.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSpaceListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/spaces/{spaceId}/directories:
+    get:
+      operationId: listPublicDirectories
+      summary: List the Directory hierarchy only for a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/SpaceId"
+      responses:
+        "200":
+          description: Public navigation Directory records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}:
+    get:
+      operationId: getPublishedLearningNote
+      summary: Get Published Content only when its Knowledge Space is public
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Published Content returned without owner draft fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedLearningNote"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}/links:
+    get:
+      operationId: listPublishedNoteLinks
+      summary: List forward links between Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Public forward Note Links.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/notes/{noteId}/backlinks:
+    get:
+      operationId: listPublishedNoteBacklinks
+      summary: List backlinks derived only from Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Public derived backlinks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/search:
+    get:
+      operationId: searchOwnerLearningNotes
+      summary: Search all owner-visible current Learning Note content
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/TagIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/SearchPageSize"
+      responses:
+        "200":
+          description: Ranked current Learning Note search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/search:
+    get:
+      operationId: searchPublishedLearningNotes
+      summary: Search only Published Content in public Knowledge Spaces
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/SpaceIdQuery"
+        - $ref: "#/components/parameters/TagIdQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/SearchPageSize"
+      responses:
+        "200":
+          description: Ranked public Published Content search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultListResponse"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/notes/{noteId}/attachments:
+    get:
+      operationId: listLearningNoteAttachments
+      summary: List managed Attachments owned by a Learning Note
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Learning Note Attachments including private draft files.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: uploadLearningNoteAttachment
+      summary: Upload an Attachment that remains private until referenced Published Content is published
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment stored using an immutable storage key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/attachments/{attachmentId}:
+    get:
+      operationId: downloadOwnerAttachment
+      summary: Download an Attachment as the Knowledge Owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/AttachmentId"
+      responses:
+        "200":
+          description: Attachment binary content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/public/attachments/{attachmentId}:
+    get:
+      operationId: downloadPublicAttachment
+      summary: Download only an Attachment referenced by Published Content in a public Knowledge Space
+      parameters:
+        - $ref: "#/components/parameters/AttachmentId"
+      responses:
+        "200":
+          description: Public Attachment binary content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Report API process health
+      responses:
+        "200":
+          description: The API process is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Report API dependency readiness
+      responses:
+        "200":
+          description: The API can reach PostgreSQL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+        "503":
+          description: A required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    ownerSession:
+      type: apiKey
+      in: cookie
+      name: notefoundry_session
+  responses:
+    InvalidRequest:
+      description: Request data is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthenticated:
+      description: A valid Knowledge Owner session is required.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The authenticated identity is not authorized.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RequestTooLarge:
+      description: The request body exceeds the allowed size.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: An internal error occurred without exposing implementation details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many authentication requests were sent in the current window.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    SpaceId:
+      name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SpaceIdQuery:
+      name: spaceId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    DirectoryIdQuery:
+      name: directoryId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    TagIdQuery:
+      name: tagId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    SearchQuery:
+      name: q
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SearchPageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    DirectoryId:
+      name: directoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TagId:
+      name: tagId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NoteId:
+      name: noteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RevisionId:
+      name: revisionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AttachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    StatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/APIError"
+    APIError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    OwnerSessionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - owner
+        - expiresAt
+      properties:
+        owner:
+          type: object
+          additionalProperties: false
+          required:
+            - githubUserId
+            - login
+            - avatarUrl
+          properties:
+            githubUserId:
+              type: integer
+              format: int64
+            login:
+              type: string
+            avatarUrl:
+              type: string
+              format: uri
+        expiresAt:
+          type: string
+          format: date-time
+    KnowledgeSpace:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - visibility
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+    CreateKnowledgeSpaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - visibility
+      properties:
+        name:
+          type: string
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+    RenameKnowledgeSpaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    Pagination:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - pageSize
+        - totalItems
+        - totalPages
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    KnowledgeSpaceListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeSpace"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    Directory:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - parentId
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+    CreateDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    RenameDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    MoveDirectoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - parentId
+      properties:
+        parentId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    DirectoryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Directory"
+    Tag:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+    TagWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    TagListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    TagDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+    SetNoteTagsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tagIds
+      properties:
+        tagIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+    MergeTagRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - targetTagId
+      properties:
+        targetTagId:
+          type: string
+          format: uuid
+    PublishedContent:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - slug
+        - markdown
+        - publishedAt
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    LearningNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - directoryId
+        - title
+        - slug
+        - markdown
+        - version
+        - published
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        published:
+          oneOf:
+            - $ref: "#/components/schemas/PublishedContent"
+            - type: "null"
+    LearningNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LearningNote"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    PublishedLearningNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - directoryId
+        - title
+        - slug
+        - markdown
+        - publishedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    PublishedLearningNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublishedLearningNote"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    LinkedNote:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - title
+        - slug
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+    LinkedNoteDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LinkedNote"
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - title
+        - slug
+        - snippet
+        - rank
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        snippet:
+          type: string
+        rank:
+          type: number
+          format: double
+    SearchResultListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    Attachment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - noteId
+        - originalName
+        - mediaType
+        - sizeBytes
+        - sha256
+        - publishedAt
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        noteId:
+          type: string
+          format: uuid
+        originalName:
+          type: string
+        mediaType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        publishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    AttachmentDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+    CreateLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - title
+        - markdown
+      properties:
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+    AutosaveLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+        - title
+        - markdown
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        markdown:
+          type: string
+    PublishLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+    MoveLearningNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+        - spaceId
+        - directoryId
+        - confirmPublish
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        confirmPublish:
+          type: boolean
+          description: Must be true when moving from a private Knowledge Space into a public one.
+    VersionedNoteCommandRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+    NoteRevision:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - noteId
+        - title
+        - slug
+        - markdown
+        - reason
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        noteId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        markdown:
+          type: string
+        reason:
+          type: string
+          enum:
+            - publish
+            - restore
+            - manual
+        createdAt:
+          type: string
+          format: date-time
+    NoteRevisionListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoteRevision"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    TrashNoteEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - note
+        - trashedAt
+      properties:
+        note:
+          $ref: "#/components/schemas/LearningNote"
+        trashedAt:
+          type: string
+          format: date-time
+    TrashNoteListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashNoteEntry"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    RestoreTrashNoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmPublish
+      properties:
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        confirmPublish:
+          type: boolean
+          description: Must be true when restoring into a public Knowledge Space; restoration and publication are atomic.

@@ -4,7 +4,25 @@
 
 ## 当前状态
 
-项目处于设计完成、准备实现 v0.1 的阶段，尚未开始业务代码开发。
+v0.1 知识管理核心已经实现并通过本地 Docker Compose 部署验收，包括公开阅读、Owner 工作区、Markdown 发布流、搜索、附件、Trash、PostgreSQL Jobs、加密备份和恢复。正式发布仍需使用真实 GitHub OAuth 应用、公开域名和独立于应用主机的 S3 存储完成外部验收。
+
+## 本地开发
+
+需要 Go 1.25、Node.js 24 和可运行 Docker Compose 的 Docker 环境。
+
+```bash
+cp .env.example .env
+docker compose --profile local-s3 up -d --build
+```
+
+本地站点默认位于 `http://localhost:8088`，健康检查为 `GET /healthz` 和 `GET /readyz`。完整部署、备份、恢复和升级步骤见 [docs/deployment.md](./docs/deployment.md)。
+
+开发检查：
+
+```bash
+cd backend && go test ./... && go vet ./...
+cd ../frontend && npm ci && npm run typecheck && npm run lint && npm run build
+```
 
 ## 版本路线
 
@@ -35,3 +53,5 @@
 ## v0.1 验收主线
 
 部署系统并真实用于学习 Hermes Agent：建立 `AI Agent/Hermes Agent` 目录结构，完成并发布至少五篇学习笔记，验证中英文搜索、稳定链接与反向链接、公开/私有隔离、删除恢复及完整备份恢复。
+
+可重复的 API 验收脚本位于 `scripts/run-v01-acceptance.sh`。本地工程验收记录见 [docs/v0.1-acceptance.md](./docs/v0.1-acceptance.md)。
