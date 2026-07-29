@@ -34,13 +34,13 @@ export function PublicSearch() {
   return (
     <section className="public-search" aria-labelledby="search-title">
       <div className="section-kicker">中英文检索</div>
-      <h2 id="search-title">搜索已沉淀的知识</h2>
+      <h2 id="search-title">搜索学习笔记</h2>
       <form onSubmit={submit} role="search">
         <Search aria-hidden="true" size={20} />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="试试“memory”“上下文”或“Agent Loop”"
+          placeholder="输入中文或英文关键词"
           aria-label="搜索已发布的学习笔记"
         />
         {query && <button type="button" className="icon-button" onClick={clear} aria-label="清空搜索"><X size={18} /></button>}

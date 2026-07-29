@@ -8,8 +8,7 @@ export function SiteHeader() {
         <span>NoteFoundry</span>
       </Link>
       <nav aria-label="主导航">
-        <Link href="/#spaces">知识空间</Link>
-        <Link href="/app">所有者工作区</Link>
+        <Link href="/#spaces">浏览知识空间</Link>
       </nav>
     </header>
   );
