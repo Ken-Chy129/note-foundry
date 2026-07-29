@@ -109,11 +109,12 @@ func ScanSourceDirectory(ctx context.Context, sourceDirectory string) ([]Documen
 			documents = append(documents, archiveDocuments...)
 			issues = append(issues, archiveIssues...)
 		case ".lakebook":
-			issues = append(issues, ScanIssue{
-				Code:       IssueUnsupportedSource,
-				SourcePath: fullPath,
-				Message:    "Lakebook scanning is not available in this implementation slice",
-			})
+			lakeDocuments, lakeIssues, readErr := scanLakebookFile(fullPath)
+			if readErr != nil {
+				return nil, nil, readErr
+			}
+			documents = append(documents, lakeDocuments...)
+			issues = append(issues, lakeIssues...)
 		}
 	}
 	return documents, issues, nil
