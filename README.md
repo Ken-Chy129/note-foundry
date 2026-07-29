@@ -12,7 +12,7 @@ v0.1 知识管理核心已经实现并通过本地 Docker Compose 部署验收�
 
 ```bash
 cp .env.example .env
-docker compose --profile local-s3 up -d --build
+docker compose --profile local-s3 --profile backup up -d --build
 ```
 
 本地站点默认位于 `http://localhost:8088`，健康检查为 `GET /healthz` 和 `GET /readyz`。完整部署、备份、恢复和升级步骤见 [docs/deployment.md](./docs/deployment.md)。

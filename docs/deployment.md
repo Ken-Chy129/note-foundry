@@ -2,7 +2,7 @@
 
 ## Required services
 
-The Compose stack runs Caddy, the Next.js web application, the Go API and worker roles, PostgreSQL, and a one-shot migration role. Production backup storage must be an S3-compatible bucket independent of the application host. The `local-s3` profile starts MinIO only for development and recovery drills.
+The default Compose stack runs Caddy, the Next.js web application, the Go API, PostgreSQL, and a one-shot migration role. The durable backup worker is enabled with the `backup` profile after S3-compatible storage is configured. Production backup storage must be independent of the application host. The `local-s3` profile starts MinIO only for development and recovery drills.
 
 ## Configuration
 
@@ -28,12 +28,18 @@ curl -fsS https://notes.example.com/healthz
 curl -fsS https://notes.example.com/readyz
 ```
 
-The `migrate` role applies embedded, idempotent PostgreSQL migrations before the API and worker start. Caddy obtains and renews HTTPS certificates when `SITE_ADDRESS` is a public hostname with working DNS and inbound ports 80 and 443.
+The `migrate` role applies embedded, idempotent PostgreSQL migrations before the API starts. Caddy obtains and renews HTTPS certificates when `SITE_ADDRESS` is a public hostname with working DNS and inbound ports 80 and 443. Without the `backup` profile the knowledge workspace is fully usable, but no automatic backup or restore is available.
+
+After external S3-compatible storage is configured, enable automatic backups:
+
+```bash
+docker compose --profile backup up -d --build
+```
 
 For a local stack with MinIO:
 
 ```bash
-docker compose --profile local-s3 up -d --build
+docker compose --profile local-s3 --profile backup up -d --build
 curl -fsS http://localhost:8088/readyz
 ```
 
@@ -67,7 +73,7 @@ Restoration replaces the target database contents and attachment directory and t
 ```bash
 docker compose stop caddy web api worker
 docker compose --profile tools run --rm restore
-docker compose up -d api worker web caddy
+docker compose --profile backup up -d api worker web caddy
 curl -fsS https://notes.example.com/readyz
 ```
 

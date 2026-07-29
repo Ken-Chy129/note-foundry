@@ -55,18 +55,19 @@ services:
   worker:
     build:
       context: ./backend
+    profiles: ["backup"]
     command: ["/usr/local/bin/notefoundry-worker"]
     environment: &worker_environment
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       ATTACHMENTS_DIR: /var/lib/notefoundry/attachments
-      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?BACKUP_S3_ENDPOINT must be set}
-      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:?BACKUP_S3_ACCESS_KEY must be set}
-      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:?BACKUP_S3_SECRET_KEY must be set}
-      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?BACKUP_S3_BUCKET must be set}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
       BACKUP_S3_REGION: ${BACKUP_S3_REGION:-us-east-1}
       BACKUP_S3_USE_SSL: ${BACKUP_S3_USE_SSL:-true}
       BACKUP_PREFIX: ${BACKUP_PREFIX:-notefoundry}
-      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?BACKUP_PASSPHRASE must be set}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:-}
       BACKUP_DAILY_RETENTION: ${BACKUP_DAILY_RETENTION:-7}
       BACKUP_WEEKLY_RETENTION: ${BACKUP_WEEKLY_RETENTION:-8}
       BACKUP_TEMP_DIR: /tmp
@@ -96,8 +97,8 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     ports:
-      - "${HTTP_PORT:-8088}:80"
-      - "${HTTPS_PORT:-8443}:443"
+      - "127.0.0.1:${HTTP_PORT:-8088}:80"
+      - "127.0.0.1:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - notefoundry_caddy_data:/data
@@ -113,7 +114,7 @@ services:
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-notefoundry-local}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set for local-s3}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
     ports:
       - "127.0.0.1:${MINIO_PORT:-59000}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT:-59001}:9001"
@@ -128,7 +129,7 @@ services:
       - minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-notefoundry-local}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set for local-s3}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
       BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-notefoundry-backups}
     entrypoint:
       - /bin/sh
