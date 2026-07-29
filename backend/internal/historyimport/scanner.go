@@ -29,10 +29,11 @@ const (
 type IssueCode string
 
 const (
-	IssueMissingAsset      IssueCode = "missing_asset"
-	IssueEmptyDocument     IssueCode = "empty_document"
-	IssueUnsupportedSource IssueCode = "unsupported_source"
-	IssueUnreadableEntry   IssueCode = "unreadable_entry"
+	IssueMissingAsset        IssueCode = "missing_asset"
+	IssueEmptyDocument       IssueCode = "empty_document"
+	IssueAssetDownloadFailed IssueCode = "asset_download_failed"
+	IssueUnsupportedSource   IssueCode = "unsupported_source"
+	IssueUnreadableEntry     IssueCode = "unreadable_entry"
 )
 
 type SourceDescriptor struct {
