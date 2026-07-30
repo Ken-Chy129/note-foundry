@@ -3,7 +3,7 @@
 import { BookOpen, ChevronRight, Files, Folder, FolderOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Directory, LearningNote } from "@/lib/types";
-import { buildDirectoryTree, directoryAncestorIds, type DirectoryTreeNode } from "@/components/workspace/workspaceTree";
+import { buildDirectoryTree, directoryAncestorIds, initialCollapsedDirectoryIds, type DirectoryTreeNode } from "@/components/workspace/workspaceTree";
 
 interface WorkspaceDirectoryTreeProps {
   directories: Directory[];
@@ -20,6 +20,11 @@ export function WorkspaceDirectoryTree({ directories, notes, selectedNoteId, onS
     [directories, selectedNote?.directoryId]
   );
   const selectedDirectoryIds = useMemo(() => new Set(selectedDirectoryPath), [selectedDirectoryPath]);
+  const initiallyCollapsedIds = useMemo(
+    () => initialCollapsedDirectoryIds(directories, selectedDirectoryPath),
+    [directories, selectedDirectoryPath]
+  );
+  const directoryTreeKey = useMemo(() => directories.map((directory) => directory.id).join(":"), [directories]);
 
   if (notes.length === 0 && directories.length === 0) {
     return <div className="note-navigation"><p className="sidebar-empty">在这个空间中创建第一篇学习笔记。</p></div>;
@@ -27,7 +32,9 @@ export function WorkspaceDirectoryTree({ directories, notes, selectedNoteId, onS
 
   return (
     <DirectoryTreeContent
+      key={directoryTreeKey}
       tree={tree}
+      initiallyCollapsedIds={initiallyCollapsedIds}
       selectedDirectoryIds={selectedDirectoryIds}
       selectedNoteId={selectedNoteId}
       onSelectNote={onSelectNote}
@@ -35,15 +42,16 @@ export function WorkspaceDirectoryTree({ directories, notes, selectedNoteId, onS
   );
 }
 
-function DirectoryTreeContent({ tree, selectedDirectoryIds, selectedNoteId, onSelectNote }: {
+function DirectoryTreeContent({ tree, initiallyCollapsedIds, selectedDirectoryIds, selectedNoteId, onSelectNote }: {
   tree: ReturnType<typeof buildDirectoryTree>;
+  initiallyCollapsedIds: Set<string>;
   selectedDirectoryIds: Set<string>;
   selectedNoteId: string | null;
   onSelectNote: (note: LearningNote) => void;
 }) {
   const [collapseState, setCollapseState] = useState<{ selectedNoteId: string | null; ids: Set<string> }>(() => ({
     selectedNoteId,
-    ids: new Set()
+    ids: new Set(initiallyCollapsedIds)
   }));
   const collapsedDirectoryIds = collapseState.selectedNoteId === selectedNoteId
     ? collapseState.ids

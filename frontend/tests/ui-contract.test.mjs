@@ -124,3 +124,23 @@ test("the workspace sidebar renders notes in an accessible nested directory tree
   assert.match(tree, /directoryAncestorIds/);
   assert.match(styles, /\.directory-tree-children\s*\{[^}]*border-left:/s);
 });
+
+test("the workspace opens compactly with readable tree type and consistent NoteFoundry branding", () => {
+  const tree = source("src/components/workspace/WorkspaceDirectoryTree.tsx");
+  const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
+  const siteHeader = source("src/components/public/SiteHeader.tsx");
+  const layout = source("src/app/layout.tsx");
+  const styles = source("src/app/globals.css");
+  const logoPath = new URL("../src/components/brand/NoteFoundryLogo.tsx", import.meta.url);
+  const iconPath = new URL("../src/app/icon.svg", import.meta.url);
+
+  assert.match(tree, /initialCollapsedDirectoryIds/);
+  assert.match(styles, /\.workspace-root\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
+  assert.match(styles, /\.directory-tree-row span\s*\{[^}]*font-size:\s*\.78rem;/s);
+  assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*\.78rem;/s);
+  assert.equal(existsSync(logoPath), true);
+  assert.equal(existsSync(iconPath), true);
+  assert.match(sidebar, /<NoteFoundryLogo/);
+  assert.match(siteHeader, /<NoteFoundryLogo/);
+  assert.match(layout, /icons:/);
+});
