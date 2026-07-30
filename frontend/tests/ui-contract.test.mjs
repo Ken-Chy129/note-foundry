@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 function source(path) {
@@ -72,11 +72,24 @@ test("the public home is a compact reading index without owner or catalog decora
   const publicSearch = source("src/components/public/PublicSearch.tsx");
   const siteHeader = source("src/components/public/SiteHeader.tsx");
 
-  assert.doesNotMatch(home, /href="\/app"/);
-  assert.doesNotMatch(siteHeader, /href="\/app"/);
+  assert.doesNotMatch(home, /href="\/workspace"/);
+  assert.doesNotMatch(siteHeader, /href="\/workspace"/);
   assert.doesNotMatch(`${home}\n${siteHeader}`, /所有者工作区/);
   assert.match(home, /学习笔记/);
   assert.match(publicSearch, /搜索公开笔记/);
   assert.doesNotMatch(home, /catalog-count|home-intro-copy|<dl>/);
   assert.doesNotMatch(siteHeader, /<nav/);
+});
+
+test("the owner workspace lives only at /workspace", () => {
+  const workspaceRoute = new URL("../src/app/workspace/page.tsx", import.meta.url);
+  const legacyAppRoute = new URL("../src/app/app/page.tsx", import.meta.url);
+  const identityHTTP = source("../backend/internal/identity/http.go");
+  const apiMain = source("../backend/cmd/api/main.go");
+
+  assert.equal(existsSync(workspaceRoute), true);
+  assert.equal(existsSync(legacyAppRoute), false);
+  assert.match(identityHTTP, /postLoginPath = "\/workspace"/);
+  assert.match(apiMain, /PostLoginPath:\s+"\/workspace"/);
+  assert.doesNotMatch(`${identityHTTP}\n${apiMain}`, /"\/app"/);
 });

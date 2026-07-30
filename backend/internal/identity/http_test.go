@@ -16,7 +16,7 @@ func TestHTTPHandlerStartsGitHubLoginWithProtectedStateCookie(t *testing.T) {
 		GenerateToken:          tokenSequence("oauth-state"),
 		Now:                    time.Now,
 	})
-	handler := NewHTTPHandler(service, HTTPConfig{SecureCookies: true, PostLoginPath: "/app"})
+	handler := NewHTTPHandler(service, HTTPConfig{SecureCookies: true, PostLoginPath: "/workspace"})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -54,7 +54,7 @@ func TestHTTPHandlerCompletesLoginAndSetsOwnerSession(t *testing.T) {
 		GenerateToken: tokenSequence("session-token"),
 		Now:           func() time.Time { return now },
 	})
-	handler := NewHTTPHandler(service, HTTPConfig{SecureCookies: true, PostLoginPath: "/app"})
+	handler := NewHTTPHandler(service, HTTPConfig{SecureCookies: true, PostLoginPath: "/workspace"})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -66,7 +66,7 @@ func TestHTTPHandlerCompletesLoginAndSetsOwnerSession(t *testing.T) {
 	if response.Code != http.StatusFound {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusFound)
 	}
-	if got := response.Header().Get("Location"); got != "/app" {
+	if got := response.Header().Get("Location"); got != "/workspace" {
 		t.Errorf("Location = %q", got)
 	}
 	var sessionCookie *http.Cookie

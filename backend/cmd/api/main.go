@@ -47,7 +47,7 @@ func main() {
 	})
 	identityHTTP := identity.NewHTTPHandler(identityService, identity.HTTPConfig{
 		SecureCookies:     runtimeConfig.SecureCookies,
-		PostLoginPath:     "/app",
+		PostLoginPath:     "/workspace",
 		TrustForwardedFor: runtimeConfig.Environment == config.EnvironmentProduction,
 	})
 	knowledgeRepository := knowledge.NewPostgresRepository(pool)

@@ -32,7 +32,7 @@ type HTTPHandler struct {
 func NewHTTPHandler(service *Service, config HTTPConfig) *HTTPHandler {
 	postLoginPath := config.PostLoginPath
 	if postLoginPath == "" {
-		postLoginPath = "/app"
+		postLoginPath = "/workspace"
 	}
 	return &HTTPHandler{
 		service:       service,
