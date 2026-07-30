@@ -135,9 +135,10 @@ test("the workspace opens compactly with readable tree type and consistent NoteF
   const iconPath = new URL("../src/app/icon.svg", import.meta.url);
 
   assert.match(tree, /initialCollapsedDirectoryIds/);
-  assert.match(styles, /\.workspace-root\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
-  assert.match(styles, /\.directory-tree-row span\s*\{[^}]*font-size:\s*\.78rem;/s);
-  assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*\.78rem;/s);
+  assert.match(styles, /\.workspace-root\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*font-family:\s*var\(--font-cjk\);[^}]*text-rendering:\s*auto;/s);
+  assert.match(styles, /\.sidebar-heading\s*\{[^}]*font-size:\s*11px;/s);
+  assert.match(styles, /\.directory-tree-row span\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*600;/s);
+  assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/s);
   assert.equal(existsSync(logoPath), true);
   assert.equal(existsSync(iconPath), true);
   assert.match(sidebar, /<NoteFoundryLogo/);
