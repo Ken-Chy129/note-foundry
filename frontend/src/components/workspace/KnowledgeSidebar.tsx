@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
+import { ChevronRight, FilePlus2, FolderPlus, Inbox, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import { NoteFoundryLogo } from "@/components/brand/NoteFoundryLogo";
 import type { Directory, KnowledgeSpace, LearningNoteSummary } from "@/lib/types";
 import { WorkspaceDirectoryTree } from "@/components/workspace/WorkspaceDirectoryTree";
@@ -16,6 +16,8 @@ interface KnowledgeSidebarProps {
   onCreateSpace: () => void;
   onCreateDirectory: () => void;
   onCreateNote: () => void;
+  onOpenSourceInbox: () => void;
+  onCreateSource: () => void;
   onOpenSearch: () => void;
   onOpenTrash: () => void;
 }
@@ -49,6 +51,16 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
           </button>
         ))}
       </div>
+
+      <div className="sidebar-heading sidebar-heading-sources">
+        <span>学习资料</span>
+        <button className="icon-button" onClick={props.onCreateSource} aria-label="创建手动资料"><FilePlus2 size={16} /></button>
+      </div>
+      <button className="source-inbox-link" onClick={props.onOpenSourceInbox}>
+        <Inbox size={15} />
+        <span>资料收件箱</span>
+        <ChevronRight size={14} />
+      </button>
 
       <div className="sidebar-heading sidebar-heading-notes">
         <span>目录与笔记</span>

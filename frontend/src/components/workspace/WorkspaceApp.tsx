@@ -10,6 +10,7 @@ import { InspectorPanel, type RevisionSummary } from "@/components/workspace/Ins
 import { KnowledgeSidebar } from "@/components/workspace/KnowledgeSidebar";
 import { WorkspaceDialog } from "@/components/workspace/WorkspaceDialog";
 import { WorkspaceSearchDialog } from "@/components/workspace/WorkspaceSearchDialog";
+import { SourceInboxDialog } from "@/components/workspace/SourceInboxDialog";
 
 type DialogKind = "space" | "directory" | "note" | "tag" | null;
 interface TrashEntry { note: LearningNote; trashedAt: string; }
@@ -32,6 +33,7 @@ export function WorkspaceApp() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sourceInboxMode, setSourceInboxMode] = useState<"browse" | "create" | null>(null);
   const [notice, setNotice] = useState<string>("");
 
   const refreshSpace = useCallback(async (spaceId: string) => {
@@ -70,14 +72,15 @@ export function WorkspaceApp() {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (!dialog && !trashOpen) setSearchOpen(true);
+        if (!dialog && !trashOpen && !sourceInboxMode) setSearchOpen(true);
       } else if (event.key === "Escape") {
-        setSearchOpen(false);
+        if (searchOpen) setSearchOpen(false);
+        else if (sourceInboxMode) setSourceInboxMode(null);
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [dialog, trashOpen]);
+  }, [dialog, searchOpen, sourceInboxMode, trashOpen]);
 
   const loadNoteDetails = useCallback(async (note: LearningNote) => {
     setSelectedNote(note);
@@ -211,6 +214,8 @@ export function WorkspaceApp() {
         onCreateSpace={() => setDialog("space")}
         onCreateDirectory={() => setDialog("directory")}
         onCreateNote={() => setDialog("note")}
+        onOpenSourceInbox={() => setSourceInboxMode("browse")}
+        onCreateSource={() => setSourceInboxMode("create")}
         onOpenSearch={() => setSearchOpen(true)}
         onOpenTrash={() => void openTrash()}
       />
@@ -266,6 +271,7 @@ export function WorkspaceApp() {
         </div>
       </WorkspaceDialog>}
       {searchOpen && <WorkspaceSearchDialog spaces={spaces} onClose={() => setSearchOpen(false)} onSelectResult={openSearchResult} />}
+      {sourceInboxMode && <SourceInboxDialog initialCreate={sourceInboxMode === "create"} onClose={() => setSourceInboxMode(null)} />}
     </main>
   );
 }

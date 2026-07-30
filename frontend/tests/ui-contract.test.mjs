@@ -169,6 +169,28 @@ test("workspace note navigation loads lightweight summaries and fetches full con
   assert.doesNotMatch(workspace, /PageResponse<LearningNote>>\(`\/api\/v1\/notes\?spaceId=/);
 });
 
+test("v0.2 workspace exposes a private manual Source Inbox", () => {
+  const workspace = source("src/components/workspace/WorkspaceApp.tsx");
+  const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
+  const types = source("src/lib/types.ts");
+  const sourceInboxPath = new URL("../src/components/workspace/SourceInboxDialog.tsx", import.meta.url);
+
+  assert.equal(existsSync(sourceInboxPath), true);
+  assert.match(types, /export interface LearningSourceSummary/);
+  assert.match(sidebar, /资料收件箱/);
+  assert.match(sidebar, /onOpenSourceInbox/);
+  assert.match(workspace, /<SourceInboxDialog/);
+  assert.match(workspace, /!dialog && !trashOpen && !sourceInboxMode/);
+
+  const sourceInbox = source("src/components/workspace/SourceInboxDialog.tsx");
+  assert.match(sourceInbox, /\/api\/v1\/sources\?inbox=true/);
+  assert.match(sourceInbox, /method:\s*"POST"/);
+  assert.match(sourceInbox, /kind:\s*"manual"/);
+  assert.match(sourceInbox, /保存备注/);
+  assert.match(sourceInbox, /手动资料/);
+  assert.match(sourceInbox, /还没有待整理的学习资料/);
+});
+
 test("the workspace sidebar renders notes in an accessible nested directory tree", () => {
   const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
   const treePath = new URL("../src/components/workspace/WorkspaceDirectoryTree.tsx", import.meta.url);

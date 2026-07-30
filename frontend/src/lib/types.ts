@@ -43,6 +43,24 @@ export interface LearningNoteSummary {
   updatedAt: string;
 }
 
+export type LearningSourceKind = "manual" | "url" | "pdf";
+export type LearningSourceProcessingStatus = "pending" | "processing" | "ready" | "failed";
+
+export interface LearningSourceSummary {
+  id: string;
+  kind: LearningSourceKind;
+  spaceId: string | null;
+  title: string;
+  captureNote: string;
+  processingStatus: LearningSourceProcessingStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LearningSource extends LearningSourceSummary {
+  content: string;
+}
+
 export interface PublishedNote {
   id: string;
   spaceId: string;
