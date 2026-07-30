@@ -178,14 +178,20 @@ test("v0.2 workspace exposes a private manual Source Inbox", () => {
   assert.equal(existsSync(sourceInboxPath), true);
   assert.match(types, /export interface LearningSourceSummary/);
   assert.match(sidebar, /资料收件箱/);
+  assert.match(sidebar, /当前空间资料/);
   assert.match(sidebar, /onOpenSourceInbox/);
+  assert.match(sidebar, /onOpenSpaceSources/);
   assert.match(workspace, /<SourceInboxDialog/);
   assert.match(workspace, /!dialog && !trashOpen && !sourceInboxMode/);
 
   const sourceInbox = source("src/components/workspace/SourceInboxDialog.tsx");
   assert.match(sourceInbox, /\/api\/v1\/sources\?inbox=true/);
+  assert.match(sourceInbox, /spaceId=/);
   assert.match(sourceInbox, /method:\s*"POST"/);
+  assert.match(sourceInbox, /method:\s*"PATCH"/);
   assert.match(sourceInbox, /kind:\s*"manual"/);
+  assert.match(sourceInbox, /所属位置/);
+  assert.match(sourceInbox, /移回资料收件箱/);
   assert.match(sourceInbox, /保存备注/);
   assert.match(sourceInbox, /手动资料/);
   assert.match(sourceInbox, /还没有待整理的学习资料/);

@@ -235,6 +235,8 @@ button, a, input, textarea, select { outline-offset: 3px; }
 .sidebar-heading-sources { margin-top: .25rem; }
 .source-inbox-link { width: calc(100% - 1rem); display: grid; grid-template-columns: 17px minmax(0, 1fr) 14px; align-items: center; gap: .45rem; margin: 0 .5rem .2rem; padding: .55rem .6rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #b5c2bc; font-size: 13px; font-weight: 400; text-align: left; cursor: pointer; }
 .source-inbox-link:hover { background: rgb(255 255 255 / 7%); color: #fff; }
+.source-inbox-link:disabled { opacity: .4; cursor: default; }
+.source-inbox-link:disabled:hover { background: transparent; color: #b5c2bc; }
 .source-inbox-link > svg:last-child { opacity: .45; }
 .space-switcher { padding: 0 .5rem; }
 .space-switcher > button { width: 100%; display: grid; grid-template-columns: 17px 1fr 14px; align-items: center; gap: .45rem; padding: .55rem .6rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #c8d2cd; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
@@ -362,6 +364,10 @@ button, a, input, textarea, select { outline-offset: 3px; }
 .source-create-form input:focus, .source-create-form textarea:focus { outline: 0; border-color: var(--forge); box-shadow: 0 0 0 3px color-mix(in srgb, var(--forge) 9%, transparent); }
 .source-form-error { margin: 0; font-size: 12px; }
 .source-capture-note, .source-content { padding-top: 1rem; border-top: 1px solid var(--line); }
+.source-organization { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .65rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.source-organization label { display: grid; gap: .35rem; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+.source-organization select { width: 100%; min-height: 36px; padding: 0 .65rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: #fff; color: var(--ink); font: inherit; }
+.source-organization .button { min-height: 36px; white-space: nowrap; }
 .source-capture-note small, .source-content small { color: var(--forge); font-size: 10px; font-weight: 600; letter-spacing: .08em; }
 .source-capture-note p, .source-content p { margin: .45rem 0 0; color: var(--ink-soft); font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
 .source-content p { color: var(--ink); }

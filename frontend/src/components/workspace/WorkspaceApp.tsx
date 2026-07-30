@@ -33,7 +33,7 @@ export function WorkspaceApp() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sourceInboxMode, setSourceInboxMode] = useState<"browse" | "create" | null>(null);
+  const [sourceInboxMode, setSourceInboxMode] = useState<"inbox" | "create" | "space" | null>(null);
   const [notice, setNotice] = useState<string>("");
 
   const refreshSpace = useCallback(async (spaceId: string) => {
@@ -214,7 +214,8 @@ export function WorkspaceApp() {
         onCreateSpace={() => setDialog("space")}
         onCreateDirectory={() => setDialog("directory")}
         onCreateNote={() => setDialog("note")}
-        onOpenSourceInbox={() => setSourceInboxMode("browse")}
+        onOpenSourceInbox={() => setSourceInboxMode("inbox")}
+        onOpenSpaceSources={() => setSourceInboxMode("space")}
         onCreateSource={() => setSourceInboxMode("create")}
         onOpenSearch={() => setSearchOpen(true)}
         onOpenTrash={() => void openTrash()}
@@ -271,7 +272,13 @@ export function WorkspaceApp() {
         </div>
       </WorkspaceDialog>}
       {searchOpen && <WorkspaceSearchDialog spaces={spaces} onClose={() => setSearchOpen(false)} onSelectResult={openSearchResult} />}
-      {sourceInboxMode && <SourceInboxDialog initialCreate={sourceInboxMode === "create"} onClose={() => setSourceInboxMode(null)} />}
+      {sourceInboxMode && <SourceInboxDialog
+        initialCreate={sourceInboxMode === "create"}
+        view={sourceInboxMode === "space" ? "space" : "inbox"}
+        spaces={spaces}
+        selectedSpaceId={selectedSpaceId}
+        onClose={() => setSourceInboxMode(null)}
+      />}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, FilePlus2, FolderPlus, Inbox, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
+import { ChevronRight, FilePlus2, Files, FolderPlus, Inbox, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import { NoteFoundryLogo } from "@/components/brand/NoteFoundryLogo";
 import type { Directory, KnowledgeSpace, LearningNoteSummary } from "@/lib/types";
 import { WorkspaceDirectoryTree } from "@/components/workspace/WorkspaceDirectoryTree";
@@ -17,6 +17,7 @@ interface KnowledgeSidebarProps {
   onCreateDirectory: () => void;
   onCreateNote: () => void;
   onOpenSourceInbox: () => void;
+  onOpenSpaceSources: () => void;
   onCreateSource: () => void;
   onOpenSearch: () => void;
   onOpenTrash: () => void;
@@ -59,6 +60,11 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
       <button className="source-inbox-link" onClick={props.onOpenSourceInbox}>
         <Inbox size={15} />
         <span>资料收件箱</span>
+        <ChevronRight size={14} />
+      </button>
+      <button className="source-inbox-link" onClick={props.onOpenSpaceSources} disabled={!props.selectedSpaceId}>
+        <Files size={15} />
+        <span>当前空间资料</span>
         <ChevronRight size={14} />
       </button>
 
