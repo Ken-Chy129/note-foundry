@@ -222,7 +222,7 @@ button, a, input, textarea, select { outline-offset: 3px; }
 
 /* Owner workspace */
 .workspace-root { height: 100vh; overflow: hidden; display: grid; grid-template-columns: 264px minmax(0, 1fr); background: #eef1ed; }
-.workspace-sidebar { min-width: 0; display: flex; flex-direction: column; border-right: 1px solid #cad1cb; background: #18211d; color: #e6ece8; }
+.workspace-sidebar { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; border-right: 1px solid #cad1cb; background: #18211d; color: #e6ece8; }
 .workspace-brand { height: 64px; display: flex; align-items: center; gap: .7rem; padding: 0 1rem; border-bottom: 1px solid rgb(255 255 255 / 10%); }
 .workspace-brand span { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #8ca097; font-family: var(--font-reading); font-size: .72rem; }
 .workspace-brand strong { font-size: .88rem; }
@@ -235,7 +235,10 @@ button, a, input, textarea, select { outline-offset: 3px; }
 .space-switcher > button { width: 100%; display: grid; grid-template-columns: 17px 1fr 14px; align-items: center; gap: .45rem; padding: .55rem .6rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #c8d2cd; text-align: left; cursor: pointer; }
 .space-switcher > button:hover, .space-switcher > button.is-active { background: rgb(255 255 255 / 8%); color: #fff; }
 .space-switcher > button > svg:last-child { opacity: .45; }
-.note-navigation { flex: 1; overflow-y: auto; padding: 0 .45rem .75rem; }
+.note-navigation { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #5f7469 transparent; padding: 0 .25rem .75rem .45rem; }
+.note-navigation::-webkit-scrollbar { width: 8px; }
+.note-navigation::-webkit-scrollbar-thumb { border: 2px solid #18211d; border-radius: 999px; background: #5f7469; }
+.note-navigation::-webkit-scrollbar-track { background: transparent; }
 .note-navigation > button { width: 100%; display: grid; grid-template-columns: 18px 1fr 8px; align-items: center; gap: .45rem; padding: .58rem .62rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #b8c4be; text-align: left; cursor: pointer; }
 .note-navigation > button:hover { background: rgb(255 255 255 / 5%); color: #fff; }
 .note-navigation > button.is-active { background: var(--forge); color: #fff; }
