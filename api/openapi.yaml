@@ -517,11 +517,12 @@ paths:
           schema:
             type: boolean
             default: false
+        - $ref: "#/components/parameters/SpaceIdQuery"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: Paginated private Learning Source summaries. `inbox=true` restricts results to sources without a primary Knowledge Space.
+          description: Paginated private Learning Source summaries. `inbox=true` restricts results to sources without a primary Knowledge Space; `spaceId` restricts results to one organized space. The filters are mutually exclusive.
           content:
             application/json:
               schema:
@@ -579,6 +580,38 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: organizeLearningSource
+      summary: Assign a Learning Source to one Knowledge Space or return it to the Source Inbox
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizeLearningSourceRequest"
+      responses:
+        "200":
+          description: Learning Source organization updated without changing its identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSource"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/notes:
@@ -1792,6 +1825,18 @@ components:
           type: string
         content:
           type: string
+    OrganizeLearningSourceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+      properties:
+        spaceId:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: A Knowledge Space id, or null to return the source to the Source Inbox.
     LearningSourceSummary:
       type: object
       additionalProperties: false

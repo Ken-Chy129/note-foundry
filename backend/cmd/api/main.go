@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -83,7 +84,18 @@ func main() {
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 	sourcesRepository := sources.NewPostgresRepository(pool)
-	sourcesService := sources.NewService(sources.ServiceConfig{Repository: sourcesRepository, GenerateID: uuid.NewString, Now: time.Now})
+	sourcesService := sources.NewService(sources.ServiceConfig{
+		Repository: sourcesRepository,
+		GenerateID: uuid.NewString,
+		Now:        time.Now,
+		SpaceExists: func(ctx context.Context, spaceID string) (bool, error) {
+			_, err := knowledgeRepository.GetSpace(ctx, spaceID)
+			if errors.Is(err, knowledge.ErrSpaceNotFound) {
+				return false, nil
+			}
+			return err == nil, err
+		},
+	})
 	sourcesHTTP := sources.NewHTTPHandler(sourcesService, identityHTTP.RequireOwner)
 
 	server := &http.Server{

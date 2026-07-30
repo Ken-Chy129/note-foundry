@@ -41,3 +41,23 @@ func TestNewManualSourceRequiresIdentityAndTitle(t *testing.T) {
 		t.Fatalf("missing title error = %v, want %v", err, ErrSourceTitleRequired)
 	}
 }
+
+func TestSourceOrganizeKeepsStableIdentityAndCanReturnToInbox(t *testing.T) {
+	createdAt := time.Date(2026, 7, 30, 15, 0, 0, 0, time.UTC)
+	organizedAt := createdAt.Add(time.Hour)
+	returnedAt := organizedAt.Add(time.Hour)
+	source, _ := NewManualSource("11111111-1111-4111-8111-111111111111", "Source", "", "", createdAt)
+
+	source.Organize(" 22222222-2222-4222-8222-222222222222 ", organizedAt)
+	if source.ID() != "11111111-1111-4111-8111-111111111111" || source.SpaceID() != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("organized source = id:%q space:%q", source.ID(), source.SpaceID())
+	}
+	if !source.UpdatedAt().Equal(organizedAt) {
+		t.Fatalf("organized updatedAt = %v, want %v", source.UpdatedAt(), organizedAt)
+	}
+
+	source.Organize("", returnedAt)
+	if source.SpaceID() != "" || !source.UpdatedAt().Equal(returnedAt) {
+		t.Fatalf("returned source = space:%q updatedAt:%v", source.SpaceID(), source.UpdatedAt())
+	}
+}

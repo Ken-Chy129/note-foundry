@@ -1,10 +1,13 @@
 package sources
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
 )
@@ -17,6 +20,7 @@ type sourceService interface {
 	CreateManualSource(context.Context, CreateManualSourceInput) (*Source, error)
 	GetSource(context.Context, string) (*Source, error)
 	ListSources(context.Context, ListFilter) (SourcePage, error)
+	OrganizeSource(context.Context, string, string) (*Source, error)
 }
 
 type HTTPHandler struct {
@@ -55,6 +59,7 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/sources", handler.requireOwner(http.HandlerFunc(handler.listSources)))
 	mux.Handle("POST /api/v1/sources", handler.requireOwner(http.HandlerFunc(handler.createSource)))
 	mux.Handle("GET /api/v1/sources/{sourceId}", handler.requireOwner(http.HandlerFunc(handler.getSource)))
+	mux.Handle("PATCH /api/v1/sources/{sourceId}", handler.requireOwner(http.HandlerFunc(handler.organizeSource)))
 }
 
 func (handler *HTTPHandler) createSource(response http.ResponseWriter, request *http.Request) {
@@ -92,6 +97,32 @@ func (handler *HTTPHandler) getSource(response http.ResponseWriter, request *htt
 	_ = httpapi.WriteJSON(response, http.StatusOK, toSourceResponse(source))
 }
 
+func (handler *HTTPHandler) organizeSource(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		SpaceID json.RawMessage `json:"spaceId"`
+	}
+	if err := httpapi.DecodeJSON(request.Body, maxSourceRequestBytes, &input); err != nil {
+		writeSourceDecodeError(response, err)
+		return
+	}
+	if len(input.SpaceID) == 0 {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "spaceId is required and may be null")
+		return
+	}
+	spaceID := ""
+	if !bytes.Equal(bytes.TrimSpace(input.SpaceID), []byte("null")) {
+		if err := json.Unmarshal(input.SpaceID, &spaceID); err != nil || strings.TrimSpace(spaceID) == "" {
+			httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "spaceId must be a Knowledge Space id or null")
+			return
+		}
+	}
+	source, err := handler.service.OrganizeSource(request.Context(), request.PathValue("sourceId"), spaceID)
+	if writeSourceServiceError(response, err, "organize") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toSourceResponse(source))
+}
+
 func (handler *HTTPHandler) listSources(response http.ResponseWriter, request *http.Request) {
 	page, pageSize, ok := sourcePagination(response, request)
 	if !ok {
@@ -106,7 +137,12 @@ func (handler *HTTPHandler) listSources(response http.ResponseWriter, request *h
 		}
 		inboxOnly = value
 	}
-	pageResult, err := handler.service.ListSources(request.Context(), ListFilter{InboxOnly: inboxOnly, Page: page, PageSize: pageSize})
+	spaceID := strings.TrimSpace(request.URL.Query().Get("spaceId"))
+	if inboxOnly && spaceID != "" {
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "inbox and spaceId filters cannot be combined")
+		return
+	}
+	pageResult, err := handler.service.ListSources(request.Context(), ListFilter{InboxOnly: inboxOnly, SpaceID: spaceID, Page: page, PageSize: pageSize})
 	if writeSourceServiceError(response, err, "list") {
 		return
 	}
@@ -207,6 +243,10 @@ func writeSourceServiceError(response http.ResponseWriter, err error, operation 
 	}
 	if errors.Is(err, ErrSourceNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "SOURCE_NOT_FOUND", "Learning Source not found")
+		return true
+	}
+	if errors.Is(err, ErrSourceSpaceNotFound) {
+		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "Knowledge Space not found")
 		return true
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" Learning Source")

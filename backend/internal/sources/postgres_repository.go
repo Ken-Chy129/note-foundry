@@ -46,14 +46,40 @@ func (repository *PostgresRepository) GetSource(ctx context.Context, id string) 
 	return source, nil
 }
 
+func (repository *PostgresRepository) UpdateSourceOrganization(ctx context.Context, source *Source) error {
+	var spaceID any
+	if source.SpaceID() != "" {
+		spaceID = source.SpaceID()
+	}
+	command, err := repository.pool.Exec(ctx, `
+		UPDATE learning_sources
+		SET space_id = $2,
+			updated_at = $3
+		WHERE id = $1
+			AND trashed_at IS NULL
+	`, source.ID(), spaceID, source.UpdatedAt())
+	if err != nil {
+		return fmt.Errorf("update Learning Source: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return ErrSourceNotFound
+	}
+	return nil
+}
+
 func (repository *PostgresRepository) ListSources(ctx context.Context, filter ListFilter) (SourcePage, error) {
+	var spaceID any
+	if filter.SpaceID != "" {
+		spaceID = filter.SpaceID
+	}
 	var totalItems int
 	if err := repository.pool.QueryRow(ctx, `
 		SELECT count(*)
 		FROM learning_sources
 		WHERE trashed_at IS NULL
 			AND (NOT $1::boolean OR space_id IS NULL)
-	`, filter.InboxOnly).Scan(&totalItems); err != nil {
+			AND ($2::uuid IS NULL OR space_id = $2)
+	`, filter.InboxOnly, spaceID).Scan(&totalItems); err != nil {
 		return SourcePage{}, fmt.Errorf("count Learning Sources: %w", err)
 	}
 	rows, err := repository.pool.Query(ctx, `
@@ -68,9 +94,10 @@ func (repository *PostgresRepository) ListSources(ctx context.Context, filter Li
 		FROM learning_sources
 		WHERE trashed_at IS NULL
 			AND (NOT $1::boolean OR space_id IS NULL)
+			AND ($2::uuid IS NULL OR space_id = $2)
 		ORDER BY updated_at DESC, id DESC
-		LIMIT $2 OFFSET $3
-	`, filter.InboxOnly, filter.PageSize, (filter.Page-1)*filter.PageSize)
+		LIMIT $3 OFFSET $4
+	`, filter.InboxOnly, spaceID, filter.PageSize, (filter.Page-1)*filter.PageSize)
 	if err != nil {
 		return SourcePage{}, fmt.Errorf("query Learning Sources: %w", err)
 	}

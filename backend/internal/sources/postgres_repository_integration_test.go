@@ -60,4 +60,32 @@ func TestPostgresRepositoryPersistsManualSourceInbox(t *testing.T) {
 	if page.Sources[0].SpaceID != "" || page.Sources[0].ProcessingStatus != ProcessingStatusReady {
 		t.Errorf("Source Inbox summary = %+v", page.Sources[0])
 	}
+
+	spaceID := "22222222-2222-4222-8222-222222222222"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO knowledge_spaces (id, name, visibility)
+		VALUES ($1, 'Source organization integration', 'private')
+		ON CONFLICT DO NOTHING
+	`, spaceID); err != nil {
+		t.Fatalf("insert target Knowledge Space: %v", err)
+	}
+	source.Organize(spaceID, createdAt.Add(time.Hour))
+	if err := repository.UpdateSourceOrganization(ctx, source); err != nil {
+		t.Fatalf("UpdateSourceOrganization() error = %v", err)
+	}
+
+	spacePage, err := repository.ListSources(ctx, ListFilter{SpaceID: spaceID, Page: 1, PageSize: 50})
+	if err != nil {
+		t.Fatalf("ListSources(space) error = %v", err)
+	}
+	if spacePage.TotalItems != 1 || len(spacePage.Sources) != 1 || spacePage.Sources[0].SpaceID != spaceID {
+		t.Fatalf("organized source page = %+v", spacePage)
+	}
+	inboxPage, err := repository.ListSources(ctx, ListFilter{InboxOnly: true, Page: 1, PageSize: 50})
+	if err != nil {
+		t.Fatalf("ListSources(inbox after organize) error = %v", err)
+	}
+	if inboxPage.TotalItems != 0 || len(inboxPage.Sources) != 0 {
+		t.Fatalf("Source Inbox after organize = %+v", inboxPage)
+	}
 }

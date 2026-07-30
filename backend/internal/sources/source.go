@@ -27,6 +27,7 @@ var (
 	ErrSourceIDRequired    = errors.New("Learning Source id is required")
 	ErrSourceTitleRequired = errors.New("Learning Source title is required")
 	ErrSourceNotFound      = errors.New("Learning Source not found")
+	ErrSourceSpaceNotFound = errors.New("Learning Source target Knowledge Space not found")
 )
 
 type Source struct {
@@ -82,6 +83,11 @@ func (source *Source) Content() string                    { return source.conten
 func (source *Source) ProcessingStatus() ProcessingStatus { return source.processingStatus }
 func (source *Source) CreatedAt() time.Time               { return source.createdAt }
 func (source *Source) UpdatedAt() time.Time               { return source.updatedAt }
+
+func (source *Source) Organize(spaceID string, now time.Time) {
+	source.spaceID = strings.TrimSpace(spaceID)
+	source.updatedAt = now
+}
 
 func (source *Source) Summary() SourceSummary {
 	return SourceSummary{

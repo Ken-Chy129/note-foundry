@@ -46,11 +46,45 @@ func TestHTTPHandlerCreatesListsAndLoadsManualSources(t *testing.T) {
 		t.Error("list did not request Source Inbox items")
 	}
 
+	spaceListRequest := httptest.NewRequest(http.MethodGet, "/api/v1/sources?spaceId=22222222-2222-4222-8222-222222222222", nil)
+	spaceListResponse := httptest.NewRecorder()
+	mux.ServeHTTP(spaceListResponse, spaceListRequest)
+	if spaceListResponse.Code != http.StatusOK || service.listFilter.SpaceID != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("space list response = %d filter:%+v", spaceListResponse.Code, service.listFilter)
+	}
+
 	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/sources/11111111-1111-4111-8111-111111111111", nil)
 	getResponse := httptest.NewRecorder()
 	mux.ServeHTTP(getResponse, getRequest)
 	if getResponse.Code != http.StatusOK || !strings.Contains(getResponse.Body.String(), "EXPLAIN ANALYZE output") {
 		t.Fatalf("get response = %d %s", getResponse.Code, getResponse.Body.String())
+	}
+
+	organizeRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/sources/11111111-1111-4111-8111-111111111111", strings.NewReader(`{"spaceId":"22222222-2222-4222-8222-222222222222"}`))
+	organizeResponse := httptest.NewRecorder()
+	mux.ServeHTTP(organizeResponse, organizeRequest)
+	if organizeResponse.Code != http.StatusOK || service.organizeSpaceID != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("organize response = %d %s space:%q", organizeResponse.Code, organizeResponse.Body.String(), service.organizeSpaceID)
+	}
+
+	returnRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/sources/11111111-1111-4111-8111-111111111111", strings.NewReader(`{"spaceId":null}`))
+	returnResponse := httptest.NewRecorder()
+	mux.ServeHTTP(returnResponse, returnRequest)
+	if returnResponse.Code != http.StatusOK || service.organizeSpaceID != "" {
+		t.Fatalf("return response = %d %s space:%q", returnResponse.Code, returnResponse.Body.String(), service.organizeSpaceID)
+	}
+}
+
+func TestHTTPHandlerRejectsAmbiguousSourceLocationFilters(t *testing.T) {
+	handler := NewHTTPHandler(&sourceServiceStub{}, allowSourceRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/sources?inbox=true&spaceId=22222222-2222-4222-8222-222222222222", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "VALIDATION_ERROR") {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }
 
@@ -81,6 +115,7 @@ func TestHTTPHandlerProtectsEverySourceRoute(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/api/v1/sources", nil),
 		httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"manual","title":"Example"}`)),
 		httptest.NewRequest(http.MethodGet, "/api/v1/sources/11111111-1111-4111-8111-111111111111", nil),
+		httptest.NewRequest(http.MethodPatch, "/api/v1/sources/11111111-1111-4111-8111-111111111111", strings.NewReader(`{"spaceId":null}`)),
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, request)
@@ -97,11 +132,12 @@ func allowSourceRequest(next http.Handler) http.Handler {
 }
 
 type sourceServiceStub struct {
-	created     *Source
-	found       *Source
-	page        SourcePage
-	createInput CreateManualSourceInput
-	listFilter  ListFilter
+	created         *Source
+	found           *Source
+	page            SourcePage
+	createInput     CreateManualSourceInput
+	listFilter      ListFilter
+	organizeSpaceID string
 }
 
 func (service *sourceServiceStub) CreateManualSource(_ context.Context, input CreateManualSourceInput) (*Source, error) {
@@ -116,4 +152,9 @@ func (service *sourceServiceStub) GetSource(context.Context, string) (*Source, e
 func (service *sourceServiceStub) ListSources(_ context.Context, filter ListFilter) (SourcePage, error) {
 	service.listFilter = filter
 	return service.page, nil
+}
+
+func (service *sourceServiceStub) OrganizeSource(_ context.Context, _ string, spaceID string) (*Source, error) {
+	service.organizeSpaceID = spaceID
+	return service.found, nil
 }
