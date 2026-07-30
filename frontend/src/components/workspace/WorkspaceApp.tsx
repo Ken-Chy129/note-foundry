@@ -211,7 +211,7 @@ export function WorkspaceApp() {
       />
       <div className="workspace-main">
         <header className="workspace-topbar">
-          <div><strong>{selectedSpace?.name ?? "学习工作台"}</strong><span>{selectedSpace ? selectedSpace.visibility === "public" ? "公开" : "私有" : "知识所有者"}</span></div>
+          <div className="workspace-space-meta"><strong>{selectedSpace?.name ?? "学习工作台"}</strong><span>{selectedSpace ? selectedSpace.visibility === "public" ? "公开" : "私有" : "知识所有者"}</span></div>
           <button className="workspace-mobile-search icon-button" onClick={() => setSearchOpen(true)} aria-label="搜索笔记"><Search size={17} /></button>
           <div className="owner-chip">
             {session?.owner.avatarUrl ? <>
