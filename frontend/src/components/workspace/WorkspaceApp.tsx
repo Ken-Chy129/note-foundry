@@ -9,6 +9,7 @@ import { EditorPane } from "@/components/workspace/EditorPane";
 import { InspectorPanel, type RevisionSummary } from "@/components/workspace/InspectorPanel";
 import { KnowledgeSidebar } from "@/components/workspace/KnowledgeSidebar";
 import { WorkspaceDialog } from "@/components/workspace/WorkspaceDialog";
+import { WorkspaceSearchDialog } from "@/components/workspace/WorkspaceSearchDialog";
 
 type DialogKind = "space" | "directory" | "note" | "tag" | null;
 interface TrashEntry { note: LearningNote; trashedAt: string; }
@@ -31,8 +32,6 @@ export function WorkspaceApp() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [notice, setNotice] = useState<string>("");
 
   const refreshSpace = useCallback(async (spaceId: string) => {
@@ -66,6 +65,19 @@ export function WorkspaceApp() {
     };
     void load();
   }, [refreshSpace]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (!dialog && !trashOpen) setSearchOpen(true);
+      } else if (event.key === "Escape") {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [dialog, trashOpen]);
 
   const loadNoteDetails = useCallback(async (note: LearningNote) => {
     setSelectedNote(note);
@@ -160,13 +172,6 @@ export function WorkspaceApp() {
     setTrashEntries((current) => current.filter((item) => item.note.id !== entry.note.id));
   }
 
-  async function search(event: FormEvent) {
-    event.preventDefault();
-    if (!searchQuery.trim()) return;
-    const response = await apiFetch<PageResponse<SearchResult>>(`/api/v1/search?q=${encodeURIComponent(searchQuery)}&pageSize=20`);
-    setSearchResults(response.data);
-  }
-
   async function openSearchResult(result: SearchResult) {
     const note = await apiFetch<LearningNote>(`/api/v1/notes/${result.id}`);
     if (selectedSpaceId !== note.spaceId) {
@@ -201,12 +206,13 @@ export function WorkspaceApp() {
         onCreateSpace={() => setDialog("space")}
         onCreateDirectory={() => setDialog("directory")}
         onCreateNote={() => setDialog("note")}
+        onOpenSearch={() => setSearchOpen(true)}
         onOpenTrash={() => void openTrash()}
       />
       <div className="workspace-main">
         <header className="workspace-topbar">
           <div><strong>{selectedSpace?.name ?? "学习工作台"}</strong><span>{selectedSpace ? selectedSpace.visibility === "public" ? "公开" : "私有" : "知识所有者"}</span></div>
-          <button className="workspace-search-trigger" onClick={() => setSearchOpen(true)}><Search size={16} /> 搜索中文或英文 <kbd>⌘K</kbd></button>
+          <button className="workspace-mobile-search icon-button" onClick={() => setSearchOpen(true)} aria-label="搜索笔记"><Search size={17} /></button>
           <div className="owner-chip">
             {session?.owner.avatarUrl ? <>
               {/* The configured GitHub owner avatar is an arbitrary remote URL. */}
@@ -254,10 +260,7 @@ export function WorkspaceApp() {
           {trashEntries.map((entry) => <div key={entry.note.id}><span><strong>{entry.note.title}</strong><small>{new Date(entry.trashedAt).toLocaleString("zh-CN")}</small></span><button onClick={() => void restoreTrash(entry)}>恢复</button><button className="danger-link" onClick={() => void permanentDelete(entry)}><Trash2 size={14} /> 永久删除</button></div>)}
         </div>
       </WorkspaceDialog>}
-      {searchOpen && <WorkspaceDialog title="搜索工作区" onClose={() => setSearchOpen(false)}>
-        <form className="workspace-search-form" onSubmit={search}><Search size={18} /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="memory / 上下文 / tools" /><button className="button button-primary">搜索</button></form>
-        <div className="workspace-search-results">{searchResults.map((result) => <button key={result.id} onClick={() => void openSearchResult(result)}><strong>{result.title}</strong><span>{result.snippet}</span></button>)}</div>
-      </WorkspaceDialog>}
+      {searchOpen && <WorkspaceSearchDialog spaces={spaces} onClose={() => setSearchOpen(false)} onSelectResult={openSearchResult} />}
     </main>
   );
 }

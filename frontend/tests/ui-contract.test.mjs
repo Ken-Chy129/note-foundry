@@ -44,17 +44,18 @@ test("the v0.1 interface declares Simplified Chinese and uses Chinese core copy"
   const home = source("src/app/page.tsx");
   const publicSearch = source("src/components/public/PublicSearch.tsx");
   const workspace = source("src/components/workspace/WorkspaceApp.tsx");
+  const workspaceSearch = source("src/components/workspace/WorkspaceSearchDialog.tsx");
   const editor = source("src/components/workspace/EditorPane.tsx");
   const inspector = source("src/components/workspace/InspectorPanel.tsx");
 
   assert.match(layout, /<html lang="zh-CN">/);
   assert.match(home, /知识空间/);
   assert.match(publicSearch, /搜索公开笔记/);
-  assert.match(workspace, /搜索工作区/);
+  assert.match(workspaceSearch, /搜索笔记/);
   assert.match(editor, /已保存/);
   assert.match(inspector, /修订记录/);
 
-  const interfaceCopy = `${home}\n${publicSearch}\n${workspace}\n${editor}\n${inspector}`;
+  const interfaceCopy = `${home}\n${publicSearch}\n${workspace}\n${workspaceSearch}\n${editor}\n${inspector}`;
   for (const english of [
     "Knowledge spaces",
     "Owner workspace",
@@ -104,5 +105,31 @@ test("the workspace note list owns a shrinkable vertical scroll area", () => {
   assert.match(
     styles,
     /\.note-navigation\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto;[^}]*overflow-y:\s*auto;/s
+  );
+});
+
+test("workspace search opens from the sidebar and keeps results in a bounded scroller", () => {
+  const workspace = source("src/components/workspace/WorkspaceApp.tsx");
+  const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
+  const searchDialogPath = new URL("../src/components/workspace/WorkspaceSearchDialog.tsx", import.meta.url);
+  const styles = source("src/app/globals.css");
+
+  assert.doesNotMatch(workspace, /className="workspace-search-trigger"/);
+  assert.match(workspace, /<WorkspaceSearchDialog/);
+  assert.match(sidebar, /className="sidebar-search-button"/);
+  assert.match(sidebar, /onOpenSearch/);
+  assert.equal(existsSync(searchDialogPath), true);
+
+  const searchDialog = source("src/components/workspace/WorkspaceSearchDialog.tsx");
+  assert.match(searchDialog, /aria-live="polite"/);
+  assert.match(searchDialog, /正在搜索/);
+  assert.match(searchDialog, /没有找到相关笔记/);
+  assert.match(
+    styles,
+    /\.workspace-search-dialog\s*\{[^}]*display:\s*flex;[^}]*overflow:\s*hidden;/s
+  );
+  assert.match(
+    styles,
+    /\.workspace-search-results\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
   );
 });
