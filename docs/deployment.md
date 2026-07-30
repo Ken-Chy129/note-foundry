@@ -2,7 +2,7 @@
 
 ## Required services
 
-The default Compose stack runs Caddy, the Next.js web application, the Go API, PostgreSQL, and a one-shot migration role. The durable backup worker is enabled with the `backup` profile after S3-compatible storage is configured. Production backup storage must be independent of the application host. The `local-s3` profile starts MinIO only for development and recovery drills.
+The default Compose stack runs Caddy, the Next.js web application, the Go API, the durable Job worker, PostgreSQL, and a one-shot migration role. The worker can process non-backup Jobs without S3. Automatic backups are enabled only when `BACKUP_ENABLED=true` and S3-compatible storage is configured. Production backup storage must be independent of the application host. The `local-s3` profile starts MinIO only for development and recovery drills.
 
 ## Configuration
 
@@ -14,6 +14,7 @@ Copy `.env.example` to `.env` and replace every placeholder. Production requires
 - a long random PostgreSQL password
 - a GitHub OAuth application whose callback URL is `https://notes.example.com/auth/github/callback`
 - the immutable numeric GitHub User ID of the sole Knowledge Owner
+- `BACKUP_ENABLED=true` before declaring v0.1 complete
 - TLS-enabled S3-compatible storage credentials scoped to the configured backup bucket and prefix
 - a long backup passphrase stored separately from both the application host and backup bucket
 
@@ -28,18 +29,18 @@ curl -fsS https://notes.example.com/healthz
 curl -fsS https://notes.example.com/readyz
 ```
 
-The `migrate` role applies embedded, idempotent PostgreSQL migrations before the API starts. Caddy obtains and renews HTTPS certificates when `SITE_ADDRESS` is a public hostname with working DNS and inbound ports 80 and 443. Without the `backup` profile the knowledge workspace is fully usable, but no automatic backup or restore is available.
+The `migrate` role applies embedded, idempotent PostgreSQL migrations before the API starts. Caddy obtains and renews HTTPS certificates when `SITE_ADDRESS` is a public hostname with working DNS and inbound ports 80 and 443. With `BACKUP_ENABLED=false` the knowledge workspace and non-backup worker roles remain usable, but no automatic backup is scheduled.
 
-After external S3-compatible storage is configured, enable automatic backups:
+After external S3-compatible storage is configured, set `BACKUP_ENABLED=true` and restart the worker:
 
 ```bash
-docker compose --profile backup up -d --build
+docker compose up -d --build worker
 ```
 
 For a local stack with MinIO:
 
 ```bash
-docker compose --profile local-s3 --profile backup up -d --build
+BACKUP_ENABLED=true docker compose --profile local-s3 up -d --build
 curl -fsS http://localhost:8088/readyz
 ```
 
@@ -73,7 +74,7 @@ Restoration replaces the target database contents and attachment directory and t
 ```bash
 docker compose stop caddy web api worker
 docker compose --profile tools run --rm restore
-docker compose --profile backup up -d api worker web caddy
+docker compose up -d api worker web caddy
 curl -fsS https://notes.example.com/readyz
 ```
 

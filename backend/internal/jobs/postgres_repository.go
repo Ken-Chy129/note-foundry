@@ -49,7 +49,10 @@ func (repository *PostgresRepository) Enqueue(ctx context.Context, job Job) (Job
 	return stored, false, nil
 }
 
-func (repository *PostgresRepository) Claim(ctx context.Context, workerID string, now time.Time, lease time.Duration) (Job, error) {
+func (repository *PostgresRepository) Claim(ctx context.Context, workerID string, now time.Time, lease time.Duration, kinds []string) (Job, error) {
+	if len(kinds) == 0 {
+		return Job{}, ErrNoJob
+	}
 	transaction, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return Job{}, fmt.Errorf("begin Job claim: %w", err)
@@ -65,8 +68,9 @@ func (repository *PostgresRepository) Claim(ctx context.Context, workerID string
 			locked_by = NULL,
 			completed_at = $1,
 			updated_at = $1
-		WHERE state = 'running' AND locked_at < $2 AND attempts >= max_attempts
-	`, now, staleBefore); err != nil {
+		WHERE kind = ANY($3::text[])
+			AND state = 'running' AND locked_at < $2 AND attempts >= max_attempts
+	`, now, staleBefore, kinds); err != nil {
 		return Job{}, fmt.Errorf("expire exhausted Jobs: %w", err)
 	}
 
@@ -75,7 +79,8 @@ func (repository *PostgresRepository) Claim(ctx context.Context, workerID string
 		WITH candidate AS (
 			SELECT id
 			FROM jobs
-			WHERE attempts < max_attempts
+			WHERE kind = ANY($3::text[])
+				AND attempts < max_attempts
 				AND (
 					(state = 'pending' AND available_at <= $1)
 					OR (state = 'running' AND locked_at < $2)
@@ -88,7 +93,7 @@ func (repository *PostgresRepository) Claim(ctx context.Context, workerID string
 		SET state = 'running',
 			attempts = job.attempts + 1,
 			locked_at = $1,
-			locked_by = $3,
+			locked_by = $4,
 			updated_at = $1
 		FROM candidate
 		WHERE job.id = candidate.id
@@ -96,7 +101,7 @@ func (repository *PostgresRepository) Claim(ctx context.Context, workerID string
 			job.available_at, job.locked_at, COALESCE(job.locked_by, ''),
 			COALESCE(job.last_error, ''), COALESCE(job.idempotency_key, ''),
 			job.completed_at, job.created_at, job.updated_at
-	`, now, staleBefore, workerID)
+	`, now, staleBefore, kinds, workerID)
 	if err := scanJob(row, &job); errors.Is(err, pgx.ErrNoRows) {
 		return Job{}, ErrNoJob
 	} else if err != nil {

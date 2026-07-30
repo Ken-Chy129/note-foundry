@@ -37,39 +37,61 @@ func main() {
 	if err := database.ApplyMigrations(ctx, pool); err != nil {
 		log.Fatal(err)
 	}
-	store, err := backup.NewMinioStore(backup.MinioStoreConfig{
-		Endpoint:  runtimeConfig.BackupS3Endpoint,
-		AccessKey: runtimeConfig.BackupS3AccessKey,
-		SecretKey: runtimeConfig.BackupS3SecretKey,
-		Bucket:    runtimeConfig.BackupS3Bucket,
-		Region:    runtimeConfig.BackupS3Region,
-		UseSSL:    runtimeConfig.BackupS3UseSSL,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := store.CheckBucket(ctx); err != nil {
-		log.Fatal(err)
-	}
-
 	jobRepository := jobs.NewPostgresRepository(pool)
-	backupService := backup.NewService(backup.ServiceConfig{
-		Archiver: backup.Archiver{
-			DatabaseURL:          runtimeConfig.DatabaseURL,
-			AttachmentsDirectory: runtimeConfig.AttachmentsDirectory,
-			Passphrase:           runtimeConfig.BackupPassphrase,
-			TemporaryDirectory:   runtimeConfig.BackupTemporaryDirectory,
-			Tools: backup.PostgresTools{
-				DumpCommand:    runtimeConfig.PostgresDumpCommand,
-				RestoreCommand: runtimeConfig.PostgresRestoreCommand,
+	handlers := make(map[string]jobs.Handler)
+	var backupScheduler *backup.Scheduler
+	if runtimeConfig.BackupEnabled {
+		store, err := backup.NewMinioStore(backup.MinioStoreConfig{
+			Endpoint:  runtimeConfig.BackupS3Endpoint,
+			AccessKey: runtimeConfig.BackupS3AccessKey,
+			SecretKey: runtimeConfig.BackupS3SecretKey,
+			Bucket:    runtimeConfig.BackupS3Bucket,
+			Region:    runtimeConfig.BackupS3Region,
+			UseSSL:    runtimeConfig.BackupS3UseSSL,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := store.CheckBucket(ctx); err != nil {
+			log.Fatal(err)
+		}
+		backupService := backup.NewService(backup.ServiceConfig{
+			Archiver: backup.Archiver{
+				DatabaseURL:          runtimeConfig.DatabaseURL,
+				AttachmentsDirectory: runtimeConfig.AttachmentsDirectory,
+				Passphrase:           runtimeConfig.BackupPassphrase,
+				TemporaryDirectory:   runtimeConfig.BackupTemporaryDirectory,
+				Tools: backup.PostgresTools{
+					DumpCommand:    runtimeConfig.PostgresDumpCommand,
+					RestoreCommand: runtimeConfig.PostgresRestoreCommand,
+				},
 			},
-		},
-		Store:              store,
-		Prefix:             runtimeConfig.BackupPrefix,
-		DailyRetention:     runtimeConfig.BackupDailyRetention,
-		WeeklyRetention:    runtimeConfig.BackupWeeklyRetention,
-		TemporaryDirectory: runtimeConfig.BackupTemporaryDirectory,
-	})
+			Store:              store,
+			Prefix:             runtimeConfig.BackupPrefix,
+			DailyRetention:     runtimeConfig.BackupDailyRetention,
+			WeeklyRetention:    runtimeConfig.BackupWeeklyRetention,
+			TemporaryDirectory: runtimeConfig.BackupTemporaryDirectory,
+		})
+		handlers[backup.JobKindCreate] = func(ctx context.Context, job jobs.Job) error {
+			payload, err := backup.DecodeCreatePayload(job)
+			if err != nil {
+				return err
+			}
+			result, err := backupService.Create(ctx, payload.ScheduledAt)
+			if err == nil {
+				log.Printf("encrypted backup uploaded: %v", result.Keys)
+			}
+			return err
+		}
+		backupScheduler = backup.NewScheduler(jobRepository, uuid.NewString)
+		if _, inserted, err := backupScheduler.EnsureDaily(ctx, time.Now()); err != nil {
+			log.Fatal(err)
+		} else if inserted {
+			log.Print("scheduled today's encrypted backup")
+		}
+	} else {
+		log.Print("backup Jobs disabled: S3 backup configuration is not set")
+	}
 	workerID := runtimeConfig.WorkerID
 	if workerID == "" {
 		hostname, _ := os.Hostname()
@@ -78,26 +100,8 @@ func main() {
 	runner := jobs.NewRunner(jobs.RunnerConfig{
 		Repository: jobRepository,
 		WorkerID:   workerID,
-		Handlers: map[string]jobs.Handler{
-			backup.JobKindCreate: func(ctx context.Context, job jobs.Job) error {
-				payload, err := backup.DecodeCreatePayload(job)
-				if err != nil {
-					return err
-				}
-				result, err := backupService.Create(ctx, payload.ScheduledAt)
-				if err == nil {
-					log.Printf("encrypted backup uploaded: %v", result.Keys)
-				}
-				return err
-			},
-		},
+		Handlers:   handlers,
 	})
-	scheduler := backup.NewScheduler(jobRepository, uuid.NewString)
-	if _, inserted, err := scheduler.EnsureDaily(ctx, time.Now()); err != nil {
-		log.Fatal(err)
-	} else if inserted {
-		log.Print("scheduled today's encrypted backup")
-	}
 
 	if *runOnce {
 		if err := drainAvailable(ctx, runner); err != nil {
@@ -115,7 +119,10 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-scheduleTicker.C:
-			if _, inserted, err := scheduler.EnsureDaily(ctx, time.Now()); err != nil {
+			if backupScheduler == nil {
+				continue
+			}
+			if _, inserted, err := backupScheduler.EnsureDaily(ctx, time.Now()); err != nil {
 				log.Printf("schedule backup: %v", err)
 			} else if inserted {
 				log.Print("scheduled today's encrypted backup")

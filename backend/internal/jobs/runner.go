@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 )
 
 type Repository interface {
-	Claim(context.Context, string, time.Time, time.Duration) (Job, error)
+	Claim(context.Context, string, time.Time, time.Duration, []string) (Job, error)
 	Complete(context.Context, string, string, time.Time) error
 	Fail(context.Context, string, string, time.Time, time.Time, string) (State, error)
 }
@@ -19,6 +20,7 @@ type Runner struct {
 	repository  Repository
 	workerID    string
 	handlers    map[string]Handler
+	kinds       []string
 	now         func() time.Time
 	lease       time.Duration
 	baseBackoff time.Duration
@@ -58,10 +60,16 @@ func NewRunner(config RunnerConfig) *Runner {
 	if maxBackoff <= 0 {
 		maxBackoff = time.Hour
 	}
+	kinds := make([]string, 0, len(config.Handlers))
+	for kind := range config.Handlers {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
 	return &Runner{
 		repository:  config.Repository,
 		workerID:    config.WorkerID,
 		handlers:    config.Handlers,
+		kinds:       kinds,
 		now:         now,
 		lease:       lease,
 		baseBackoff: baseBackoff,
@@ -70,8 +78,11 @@ func NewRunner(config RunnerConfig) *Runner {
 }
 
 func (runner *Runner) RunOnce(ctx context.Context) (Result, error) {
+	if len(runner.kinds) == 0 {
+		return Result{}, ErrNoJob
+	}
 	claimedAt := runner.now()
-	job, err := runner.repository.Claim(ctx, runner.workerID, claimedAt, runner.lease)
+	job, err := runner.repository.Claim(ctx, runner.workerID, claimedAt, runner.lease, runner.kinds)
 	if err != nil {
 		return Result{}, err
 	}

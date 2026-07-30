@@ -26,6 +26,9 @@ func TestRunnerCompletesSuccessfulJob(t *testing.T) {
 	if result.State != StateSucceeded || repository.completedID != "job-1" {
 		t.Errorf("result = %+v, completed = %q", result, repository.completedID)
 	}
+	if len(repository.claimKinds) != 1 || repository.claimKinds[0] != "backup.create" {
+		t.Errorf("claim kinds = %v", repository.claimKinds)
+	}
 }
 
 func TestRunnerRetriesFailedJobWithExponentialBackoff(t *testing.T) {
@@ -54,6 +57,18 @@ func TestRunnerRetriesFailedJobWithExponentialBackoff(t *testing.T) {
 	}
 }
 
+func TestRunnerWithoutHandlersDoesNotClaimUnsupportedJobs(t *testing.T) {
+	repository := &repositoryStub{}
+	runner := NewRunner(RunnerConfig{Repository: repository, WorkerID: "worker-1", Handlers: map[string]Handler{}})
+
+	if _, err := runner.RunOnce(context.Background()); !errors.Is(err, ErrNoJob) {
+		t.Fatalf("RunOnce() error = %v, want %v", err, ErrNoJob)
+	}
+	if repository.claimCount != 0 {
+		t.Fatalf("repository Claim() calls = %d, want 0", repository.claimCount)
+	}
+}
+
 type repositoryStub struct {
 	claimed      Job
 	claimErr     error
@@ -61,9 +76,13 @@ type repositoryStub struct {
 	failState    State
 	retryAt      time.Time
 	failedReason string
+	claimKinds   []string
+	claimCount   int
 }
 
-func (repository *repositoryStub) Claim(context.Context, string, time.Time, time.Duration) (Job, error) {
+func (repository *repositoryStub) Claim(_ context.Context, _ string, _ time.Time, _ time.Duration, kinds []string) (Job, error) {
+	repository.claimCount++
+	repository.claimKinds = append([]string(nil), kinds...)
 	return repository.claimed, repository.claimErr
 }
 
