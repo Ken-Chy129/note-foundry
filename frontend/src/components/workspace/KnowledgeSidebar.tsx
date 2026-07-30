@@ -2,17 +2,17 @@
 
 import { ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import { NoteFoundryLogo } from "@/components/brand/NoteFoundryLogo";
-import type { Directory, KnowledgeSpace, LearningNote } from "@/lib/types";
+import type { Directory, KnowledgeSpace, LearningNoteSummary } from "@/lib/types";
 import { WorkspaceDirectoryTree } from "@/components/workspace/WorkspaceDirectoryTree";
 
 interface KnowledgeSidebarProps {
   spaces: KnowledgeSpace[];
   directories: Directory[];
-  notes: LearningNote[];
+  notes: LearningNoteSummary[];
   selectedSpaceId: string | null;
   selectedNoteId: string | null;
   onSelectSpace: (id: string) => void;
-  onSelectNote: (note: LearningNote) => void;
+  onSelectNote: (note: LearningNoteSummary) => void;
   onCreateSpace: () => void;
   onCreateDirectory: () => void;
   onCreateNote: () => void;

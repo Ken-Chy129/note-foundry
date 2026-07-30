@@ -149,6 +149,16 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if ownerPage.Notes[0].UpdatedAt().IsZero() {
 		t.Error("owner note page did not include the persisted update time")
 	}
+	summaryPage, err := repository.ListNoteSummaries(ctx, NoteListFilter{SpaceID: space.ID(), Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("ListNoteSummaries() error = %v", err)
+	}
+	if summaryPage.TotalItems != 1 || len(summaryPage.Notes) != 1 {
+		t.Fatalf("Learning Note summary page = %+v", summaryPage)
+	}
+	if summaryPage.Notes[0].ID != note.ID() || summaryPage.Notes[0].Title != "Agent Loop" || !summaryPage.Notes[0].IsPublished {
+		t.Errorf("Learning Note summary = %+v", summaryPage.Notes[0])
+	}
 	publicNote, err := repository.GetPublishedNote(ctx, note.ID())
 	if err != nil {
 		t.Fatalf("GetPublishedNote() error = %v", err)

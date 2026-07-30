@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import type { KnowledgeSpace, LearningNote, PageResponse, SearchResult } from "@/lib/types";
+import type { KnowledgeSpace, LearningNoteSummary, PageResponse, SearchResult } from "@/lib/types";
 import { WorkspaceDialog } from "@/components/workspace/WorkspaceDialog";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
@@ -54,7 +54,7 @@ export function WorkspaceSearchDialog({ spaces, onClose, onSelectResult }: Works
   useEffect(() => {
     const controller = new AbortController();
 
-    void apiFetch<PageResponse<LearningNote>>("/api/v1/notes?pageSize=12", { signal: controller.signal })
+    void apiFetch<PageResponse<LearningNoteSummary>>("/api/v1/notes?pageSize=12", { signal: controller.signal })
       .then((response) => {
         setRecentResults(response.data.map((note) => ({
           id: note.id,

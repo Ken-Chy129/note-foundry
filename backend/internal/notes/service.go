@@ -18,6 +18,7 @@ type Repository interface {
 	CreateNote(context.Context, *Note) error
 	GetNote(context.Context, string) (*Note, error)
 	ListNotes(context.Context, NoteListFilter) (NotePage, error)
+	ListNoteSummaries(context.Context, NoteListFilter) (NoteSummaryPage, error)
 	GetPublishedNote(context.Context, string) (PublishedNote, error)
 	ListPublishedNotes(context.Context, string, int, int) (PublishedNotePage, error)
 	UpdateDraft(context.Context, *Note, int64) error
@@ -137,6 +138,14 @@ func (service *Service) ListNotes(ctx context.Context, filter NoteListFilter) (N
 	page, err := service.notes.ListNotes(ctx, filter)
 	if err != nil {
 		return NotePage{}, fmt.Errorf("list Learning Notes: %w", err)
+	}
+	return page, nil
+}
+
+func (service *Service) ListNoteSummaries(ctx context.Context, filter NoteListFilter) (NoteSummaryPage, error) {
+	page, err := service.notes.ListNoteSummaries(ctx, filter)
+	if err != nil {
+		return NoteSummaryPage{}, fmt.Errorf("list Learning Note summaries: %w", err)
 	}
 	return page, nil
 }

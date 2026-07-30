@@ -52,6 +52,17 @@ type noteResponse struct {
 	UpdatedAt   string                    `json:"updatedAt"`
 }
 
+type noteSummaryResponse struct {
+	ID          string  `json:"id"`
+	SpaceID     string  `json:"spaceId"`
+	DirectoryID *string `json:"directoryId"`
+	Title       string  `json:"title"`
+	Slug        string  `json:"slug"`
+	Version     int64   `json:"version"`
+	IsPublished bool    `json:"isPublished"`
+	UpdatedAt   string  `json:"updatedAt"`
+}
+
 type publishedContentResponse struct {
 	Title       string `json:"title"`
 	Slug        string `json:"slug"`
@@ -120,7 +131,7 @@ func (handler *HTTPHandler) listNotes(response http.ResponseWriter, request *htt
 	if !ok {
 		return
 	}
-	pageResult, err := handler.service.ListNotes(request.Context(), NoteListFilter{
+	pageResult, err := handler.service.ListNoteSummaries(request.Context(), NoteListFilter{
 		SpaceID:     request.URL.Query().Get("spaceId"),
 		DirectoryID: request.URL.Query().Get("directoryId"),
 		Page:        page,
@@ -129,9 +140,9 @@ func (handler *HTTPHandler) listNotes(response http.ResponseWriter, request *htt
 	if writeNoteServiceError(response, err, "list") {
 		return
 	}
-	data := make([]noteResponse, 0, len(pageResult.Notes))
+	data := make([]noteSummaryResponse, 0, len(pageResult.Notes))
 	for _, note := range pageResult.Notes {
-		data = append(data, toNoteResponse(note))
+		data = append(data, toNoteSummaryResponse(note))
 	}
 	writeNotePage(response, data, pageResult.Page, pageResult.PageSize, pageResult.TotalItems)
 }
@@ -370,6 +381,24 @@ func toNoteResponse(note *Note) noteResponse {
 		Version:     note.Version(),
 		Published:   published,
 		UpdatedAt:   note.UpdatedAt().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
+	}
+}
+
+func toNoteSummaryResponse(note NoteSummary) noteSummaryResponse {
+	var directoryID *string
+	if note.DirectoryID != "" {
+		value := note.DirectoryID
+		directoryID = &value
+	}
+	return noteSummaryResponse{
+		ID:          note.ID,
+		SpaceID:     note.SpaceID,
+		DirectoryID: directoryID,
+		Title:       note.Title,
+		Slug:        note.Slug,
+		Version:     note.Version,
+		IsPublished: note.IsPublished,
+		UpdatedAt:   note.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
 	}
 }
 

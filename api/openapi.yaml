@@ -518,7 +518,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: Paginated current Learning Notes including owner-only drafts.
+          description: Paginated Learning Note summaries for navigation. Full Markdown is loaded from the item endpoint.
           content:
             application/json:
               schema:
@@ -1637,9 +1637,48 @@ components:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/LearningNote"
+            $ref: "#/components/schemas/LearningNoteSummary"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    LearningNoteSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - directoryId
+        - title
+        - slug
+        - version
+        - isPublished
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        directoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        isPublished:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
     PublishedLearningNote:
       type: object
       additionalProperties: false

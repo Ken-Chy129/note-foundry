@@ -4,7 +4,7 @@ import { LogOut, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { APIError, apiFetch } from "@/lib/api";
-import type { Attachment, DataResponse, Directory, KnowledgeSpace, LearningNote, LinkedNote, PageResponse, SearchResult, SessionResponse, Tag } from "@/lib/types";
+import type { Attachment, DataResponse, Directory, KnowledgeSpace, LearningNote, LearningNoteSummary, LinkedNote, PageResponse, SearchResult, SessionResponse, Tag } from "@/lib/types";
 import { EditorPane } from "@/components/workspace/EditorPane";
 import { InspectorPanel, type RevisionSummary } from "@/components/workspace/InspectorPanel";
 import { KnowledgeSidebar } from "@/components/workspace/KnowledgeSidebar";
@@ -19,7 +19,7 @@ export function WorkspaceApp() {
   const [authState, setAuthState] = useState<"loading" | "signed-in" | "signed-out" | "error">("loading");
   const [spaces, setSpaces] = useState<KnowledgeSpace[]>([]);
   const [directories, setDirectories] = useState<Directory[]>([]);
-  const [notes, setNotes] = useState<LearningNote[]>([]);
+  const [notes, setNotes] = useState<LearningNoteSummary[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<LearningNote | null>(null);
@@ -37,7 +37,7 @@ export function WorkspaceApp() {
   const refreshSpace = useCallback(async (spaceId: string) => {
     const [directoryResponse, noteResponse] = await Promise.all([
       apiFetch<DataResponse<Directory>>(`/api/v1/spaces/${spaceId}/directories`),
-      apiFetch<PageResponse<LearningNote>>(`/api/v1/notes?spaceId=${spaceId}&pageSize=100`)
+      apiFetch<PageResponse<LearningNoteSummary>>(`/api/v1/notes?spaceId=${spaceId}&pageSize=100`)
     ]);
     setDirectories(directoryResponse.data);
     setNotes(noteResponse.data);
@@ -94,6 +94,11 @@ export function WorkspaceApp() {
     setRevisions(revisionResponse.data);
   }, []);
 
+  const openNote = useCallback(async (noteId: string) => {
+    const note = await apiFetch<LearningNote>(`/api/v1/notes/${noteId}`);
+    await loadNoteDetails(note);
+  }, [loadNoteDetails]);
+
   async function selectSpace(spaceId: string) {
     setSelectedSpaceId(spaceId);
     setSelectedNote(null);
@@ -102,7 +107,7 @@ export function WorkspaceApp() {
 
   function updateNote(updated: LearningNote) {
     setSelectedNote(updated);
-    setNotes((current) => current.map((note) => note.id === updated.id ? updated : note));
+    setNotes((current) => current.map((note) => note.id === updated.id ? toNoteSummary(updated) : note));
   }
 
   async function autosave(id: string, version: number, title: string, markdown: string) {
@@ -202,7 +207,7 @@ export function WorkspaceApp() {
         selectedSpaceId={selectedSpaceId}
         selectedNoteId={selectedNote?.id ?? null}
         onSelectSpace={(id) => void selectSpace(id)}
-        onSelectNote={(note) => void loadNoteDetails(note)}
+        onSelectNote={(note) => void openNote(note.id)}
         onCreateSpace={() => setDialog("space")}
         onCreateDirectory={() => setDialog("directory")}
         onCreateNote={() => setDialog("note")}
@@ -248,7 +253,7 @@ export function WorkspaceApp() {
           await refreshSpace(selectedSpaceId);
         } else if (kind === "note") {
           const note = value as LearningNote;
-          setNotes((current) => [note, ...current]);
+          setNotes((current) => [toNoteSummary(note), ...current]);
           await loadNoteDetails(note);
         } else if (kind === "tag") {
           setTags((current) => [...current, value as Tag]);
@@ -263,6 +268,19 @@ export function WorkspaceApp() {
       {searchOpen && <WorkspaceSearchDialog spaces={spaces} onClose={() => setSearchOpen(false)} onSelectResult={openSearchResult} />}
     </main>
   );
+}
+
+function toNoteSummary(note: LearningNote): LearningNoteSummary {
+  return {
+    id: note.id,
+    spaceId: note.spaceId,
+    directoryId: note.directoryId,
+    title: note.title,
+    slug: note.slug,
+    version: note.version,
+    isPublished: note.published !== null,
+    updatedAt: note.updatedAt
+  };
 }
 
 function CreateDialog({ kind, spaceId, directories, onClose, onCreated }: { kind: Exclude<DialogKind, null>; spaceId: string | null; directories: Directory[]; onClose: () => void; onCreated: (kind: Exclude<DialogKind, null>, value: KnowledgeSpace | Directory | LearningNote | Tag) => void }) {

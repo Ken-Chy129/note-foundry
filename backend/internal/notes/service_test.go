@@ -274,6 +274,7 @@ type noteRepositoryStub struct {
 	restored               *Note
 	restoreCheckpoint      Revision
 	notePage               NotePage
+	noteSummaryPage        NoteSummaryPage
 	publishedNote          PublishedNote
 	publishedNotePage      PublishedNotePage
 	trashedID              string
@@ -297,6 +298,31 @@ func (repository *noteRepositoryStub) GetNote(context.Context, string) (*Note, e
 
 func (repository *noteRepositoryStub) ListNotes(context.Context, NoteListFilter) (NotePage, error) {
 	return repository.notePage, nil
+}
+
+func (repository *noteRepositoryStub) ListNoteSummaries(context.Context, NoteListFilter) (NoteSummaryPage, error) {
+	if len(repository.noteSummaryPage.Notes) > 0 || repository.noteSummaryPage.TotalItems > 0 {
+		return repository.noteSummaryPage, nil
+	}
+	summaries := make([]NoteSummary, 0, len(repository.notePage.Notes))
+	for _, note := range repository.notePage.Notes {
+		summaries = append(summaries, NoteSummary{
+			ID:          note.ID(),
+			SpaceID:     note.SpaceID(),
+			DirectoryID: note.DirectoryID(),
+			Title:       note.Title(),
+			Slug:        note.Slug(),
+			Version:     note.Version(),
+			IsPublished: note.Published() != nil,
+			UpdatedAt:   note.UpdatedAt(),
+		})
+	}
+	return NoteSummaryPage{
+		Notes:      summaries,
+		Page:       repository.notePage.Page,
+		PageSize:   repository.notePage.PageSize,
+		TotalItems: repository.notePage.TotalItems,
+	}, nil
 }
 
 func (repository *noteRepositoryStub) GetPublishedNote(context.Context, string) (PublishedNote, error) {

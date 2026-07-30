@@ -32,6 +32,17 @@ export interface LearningNote {
   updatedAt: string;
 }
 
+export interface LearningNoteSummary {
+  id: string;
+  spaceId: string;
+  directoryId: string | null;
+  title: string;
+  slug: string;
+  version: number;
+  isPublished: boolean;
+  updatedAt: string;
+}
+
 export interface PublishedNote {
   id: string;
   spaceId: string;

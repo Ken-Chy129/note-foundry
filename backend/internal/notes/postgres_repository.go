@@ -32,6 +32,24 @@ type NotePage struct {
 	TotalItems int
 }
 
+type NoteSummary struct {
+	ID          string
+	SpaceID     string
+	DirectoryID string
+	Title       string
+	Slug        string
+	Version     int64
+	IsPublished bool
+	UpdatedAt   time.Time
+}
+
+type NoteSummaryPage struct {
+	Notes      []NoteSummary
+	Page       int
+	PageSize   int
+	TotalItems int
+}
+
 type PublishedNote struct {
 	ID          string
 	SpaceID     string
@@ -256,6 +274,62 @@ func (repository *PostgresRepository) ListNotes(ctx context.Context, filter Note
 		return NotePage{}, fmt.Errorf("iterate Learning Notes: %w", err)
 	}
 	return NotePage{Notes: notes, Page: filter.Page, PageSize: filter.PageSize, TotalItems: totalItems}, nil
+}
+
+func (repository *PostgresRepository) ListNoteSummaries(ctx context.Context, filter NoteListFilter) (NoteSummaryPage, error) {
+	spaceID := nullableString(filter.SpaceID)
+	directoryID := nullableString(filter.DirectoryID)
+	var totalItems int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM learning_notes
+		WHERE trashed_at IS NULL
+			AND ($1::uuid IS NULL OR space_id = $1)
+			AND ($2::uuid IS NULL OR directory_id = $2)
+	`, spaceID, directoryID).Scan(&totalItems); err != nil {
+		return NoteSummaryPage{}, fmt.Errorf("count Learning Note summaries: %w", err)
+	}
+	rows, err := repository.pool.Query(ctx, `
+		SELECT id::text,
+			space_id::text,
+			COALESCE(directory_id::text, ''),
+			title,
+			slug,
+			current_version,
+			published_at IS NOT NULL,
+			updated_at
+		FROM learning_notes
+		WHERE trashed_at IS NULL
+			AND ($1::uuid IS NULL OR space_id = $1)
+			AND ($2::uuid IS NULL OR directory_id = $2)
+		ORDER BY updated_at DESC, id DESC
+		LIMIT $3 OFFSET $4
+	`, spaceID, directoryID, filter.PageSize, (filter.Page-1)*filter.PageSize)
+	if err != nil {
+		return NoteSummaryPage{}, fmt.Errorf("query Learning Note summaries: %w", err)
+	}
+	defer rows.Close()
+	summaries := make([]NoteSummary, 0, filter.PageSize)
+	for rows.Next() {
+		var summary NoteSummary
+		if err := rows.Scan(
+			&summary.ID,
+			&summary.SpaceID,
+			&summary.DirectoryID,
+			&summary.Title,
+			&summary.Slug,
+			&summary.Version,
+			&summary.IsPublished,
+			&summary.UpdatedAt,
+		); err != nil {
+			return NoteSummaryPage{}, fmt.Errorf("scan Learning Note summary: %w", err)
+		}
+		summaries = append(summaries, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return NoteSummaryPage{}, fmt.Errorf("iterate Learning Note summaries: %w", err)
+	}
+	return NoteSummaryPage{Notes: summaries, Page: filter.Page, PageSize: filter.PageSize, TotalItems: totalItems}, nil
 }
 
 func (repository *PostgresRepository) GetPublishedNote(ctx context.Context, id string) (PublishedNote, error) {

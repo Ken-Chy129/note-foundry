@@ -144,6 +144,7 @@ func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) 
 		}(),
 	}
 	repository := &noteRepositoryStub{
+		found:             note,
 		notePage:          NotePage{Notes: []*Note{note}, Page: 1, PageSize: 20, TotalItems: 1},
 		publishedNote:     published,
 		publishedNotePage: PublishedNotePage{Notes: []PublishedNote{published}, Page: 1, PageSize: 20, TotalItems: 1},
@@ -156,8 +157,14 @@ func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) 
 	ownerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/notes?spaceId=11111111-1111-4111-8111-111111111111&page=1&pageSize=20", nil)
 	ownerResponse := httptest.NewRecorder()
 	mux.ServeHTTP(ownerResponse, ownerRequest)
-	if ownerResponse.Code != http.StatusOK || !strings.Contains(ownerResponse.Body.String(), "unfinished secret draft") || !strings.Contains(ownerResponse.Body.String(), `"updatedAt":"2026-07-30T12:34:00.000000000Z"`) {
+	if ownerResponse.Code != http.StatusOK || strings.Contains(ownerResponse.Body.String(), "unfinished secret draft") || !strings.Contains(ownerResponse.Body.String(), `"updatedAt":"2026-07-30T12:34:00.000000000Z"`) {
 		t.Fatalf("owner response = %d %s", ownerResponse.Code, ownerResponse.Body.String())
+	}
+	ownerNoteRequest := httptest.NewRequest(http.MethodGet, "/api/v1/notes/33333333-3333-4333-8333-333333333333", nil)
+	ownerNoteResponse := httptest.NewRecorder()
+	mux.ServeHTTP(ownerNoteResponse, ownerNoteRequest)
+	if ownerNoteResponse.Code != http.StatusOK || !strings.Contains(ownerNoteResponse.Body.String(), "unfinished secret draft") {
+		t.Fatalf("owner note response = %d %s", ownerNoteResponse.Code, ownerNoteResponse.Body.String())
 	}
 
 	publicRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/notes/33333333-3333-4333-8333-333333333333", nil)

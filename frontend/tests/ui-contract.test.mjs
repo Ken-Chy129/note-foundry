@@ -159,6 +159,16 @@ test("workspace search opens from the sidebar, searches while typing, and shows 
   assert.doesNotMatch(styles, /\.workspace-search-footer\s*\{/);
 });
 
+test("workspace note navigation loads lightweight summaries and fetches full content on selection", () => {
+  const workspace = source("src/components/workspace/WorkspaceApp.tsx");
+  const types = source("src/lib/types.ts");
+
+  assert.match(types, /export interface LearningNoteSummary/);
+  assert.match(workspace, /PageResponse<LearningNoteSummary>/);
+  assert.match(workspace, /apiFetch<LearningNote>\(`\/api\/v1\/notes\/\$\{noteId\}`\)/);
+  assert.doesNotMatch(workspace, /PageResponse<LearningNote>>\(`\/api\/v1\/notes\?spaceId=/);
+});
+
 test("the workspace sidebar renders notes in an accessible nested directory tree", () => {
   const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
   const treePath = new URL("../src/components/workspace/WorkspaceDirectoryTree.tsx", import.meta.url);

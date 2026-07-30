@@ -2,14 +2,14 @@
 
 import { BookOpen, ChevronRight, Files, Folder, FolderOpen } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Directory, LearningNote } from "@/lib/types";
+import type { Directory, LearningNoteSummary } from "@/lib/types";
 import { buildDirectoryTree, directoryAncestorIds, initialCollapsedDirectoryIds, type DirectoryTreeNode } from "@/components/workspace/workspaceTree";
 
 interface WorkspaceDirectoryTreeProps {
   directories: Directory[];
-  notes: LearningNote[];
+  notes: LearningNoteSummary[];
   selectedNoteId: string | null;
-  onSelectNote: (note: LearningNote) => void;
+  onSelectNote: (note: LearningNoteSummary) => void;
 }
 
 export function WorkspaceDirectoryTree({ directories, notes, selectedNoteId, onSelectNote }: WorkspaceDirectoryTreeProps) {
@@ -47,7 +47,7 @@ function DirectoryTreeContent({ tree, initiallyCollapsedIds, selectedDirectoryId
   initiallyCollapsedIds: Set<string>;
   selectedDirectoryIds: Set<string>;
   selectedNoteId: string | null;
-  onSelectNote: (note: LearningNote) => void;
+  onSelectNote: (note: LearningNoteSummary) => void;
 }) {
   const [collapseState, setCollapseState] = useState<{ selectedNoteId: string | null; ids: Set<string> }>(() => ({
     selectedNoteId,
@@ -95,7 +95,7 @@ function DirectoryBranch({ node, collapsedDirectoryIds, selectedDirectoryIds, se
   selectedDirectoryIds: Set<string>;
   selectedNoteId: string | null;
   onToggle: (id: string) => void;
-  onSelectNote: (note: LearningNote) => void;
+  onSelectNote: (note: LearningNoteSummary) => void;
 }) {
   const expanded = !collapsedDirectoryIds.has(node.directory.id);
   const groupId = `directory-${node.directory.id}`;
@@ -132,7 +132,7 @@ function DirectoryBranch({ node, collapsedDirectoryIds, selectedDirectoryIds, se
   </div>;
 }
 
-function NoteTreeItem({ note, selected, onSelect }: { note: LearningNote; selected: boolean; onSelect: (note: LearningNote) => void }) {
+function NoteTreeItem({ note, selected, onSelect }: { note: LearningNoteSummary; selected: boolean; onSelect: (note: LearningNoteSummary) => void }) {
   return <button
     type="button"
     className={`directory-tree-note${selected ? " is-active" : ""}`}
@@ -142,6 +142,6 @@ function NoteTreeItem({ note, selected, onSelect }: { note: LearningNote; select
   >
     <BookOpen size={14} />
     <strong title={note.title}>{note.title}</strong>
-    {note.published && <i title="已发布" />}
+    {note.isPublished && <i title="已发布" />}
   </button>;
 }

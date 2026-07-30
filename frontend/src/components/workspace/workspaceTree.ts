@@ -1,14 +1,14 @@
-import type { Directory, LearningNote } from "@/lib/types";
+import type { Directory, LearningNoteSummary } from "@/lib/types";
 
 export interface DirectoryTreeNode {
   directory: Directory;
-  notes: LearningNote[];
+  notes: LearningNoteSummary[];
   children: DirectoryTreeNode[];
   totalNotes: number;
 }
 
 export interface WorkspaceDirectoryTree {
-  rootNotes: LearningNote[];
+  rootNotes: LearningNoteSummary[];
   directories: DirectoryTreeNode[];
 }
 
@@ -19,7 +19,7 @@ export function initialCollapsedDirectoryIds(directories: Directory[], expandedD
   return new Set(directories.map((directory) => directory.id).filter((id) => !expanded.has(id)));
 }
 
-export function buildDirectoryTree(directories: Directory[], notes: LearningNote[]): WorkspaceDirectoryTree {
+export function buildDirectoryTree(directories: Directory[], notes: LearningNoteSummary[]): WorkspaceDirectoryTree {
   const nodes = new Map<string, DirectoryTreeNode>();
   const roots: DirectoryTreeNode[] = [];
 
@@ -34,7 +34,7 @@ export function buildDirectoryTree(directories: Directory[], notes: LearningNote
     else roots.push(node);
   }
 
-  const rootNotes: LearningNote[] = [];
+  const rootNotes: LearningNoteSummary[] = [];
   for (const note of notes) {
     const directory = note.directoryId ? nodes.get(note.directoryId) : undefined;
     if (directory) directory.notes.push(note);
