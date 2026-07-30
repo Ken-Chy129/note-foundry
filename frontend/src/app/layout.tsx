@@ -9,7 +9,11 @@ export const metadata: Metadata = {
     default: "NoteFoundry — 个人学习工作台",
     template: "%s — NoteFoundry"
   },
-  description: "面向单一知识所有者的可靠学习笔记工作台。"
+  description: "面向单一知识所有者的可靠学习笔记工作台。",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

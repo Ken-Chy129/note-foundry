@@ -14,6 +14,11 @@ export interface WorkspaceDirectoryTree {
 
 const directoryNameCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
+export function initialCollapsedDirectoryIds(directories: Directory[], expandedDirectoryIds: string[] = []): Set<string> {
+  const expanded = new Set(expandedDirectoryIds);
+  return new Set(directories.map((directory) => directory.id).filter((id) => !expanded.has(id)));
+}
+
 export function buildDirectoryTree(directories: Directory[], notes: LearningNote[]): WorkspaceDirectoryTree {
   const nodes = new Map<string, DirectoryTreeNode>();
   const roots: DirectoryTreeNode[] = [];

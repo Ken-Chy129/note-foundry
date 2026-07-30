@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
+import { NoteFoundryLogo } from "@/components/brand/NoteFoundryLogo";
 import type { Directory, KnowledgeSpace, LearningNote } from "@/lib/types";
 import { WorkspaceDirectoryTree } from "@/components/workspace/WorkspaceDirectoryTree";
 
@@ -22,7 +23,7 @@ interface KnowledgeSidebarProps {
 export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
   return (
     <aside className="workspace-sidebar" aria-label="知识导航">
-      <div className="workspace-brand"><span>NF</span><strong>NoteFoundry</strong></div>
+      <div className="workspace-brand"><NoteFoundryLogo /><strong>NoteFoundry</strong></div>
       <div className="sidebar-search-area">
         <button className="sidebar-search-button" onClick={props.onOpenSearch}>
           <Search size={15} />

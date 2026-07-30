@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildDirectoryTree, directoryAncestorIds } from "../src/components/workspace/workspaceTree.ts";
+import { buildDirectoryTree, directoryAncestorIds, initialCollapsedDirectoryIds } from "../src/components/workspace/workspaceTree.ts";
 
 const directories = [
   { id: "network", spaceId: "space-1", parentId: null, name: "计算机网络" },
@@ -37,4 +37,9 @@ test("directoryAncestorIds returns the selected directory path from root to leaf
   assert.deepEqual(directoryAncestorIds(directories, "congestion"), ["network", "tcp", "congestion"]);
   assert.deepEqual(directoryAncestorIds(directories, "missing"), []);
   assert.deepEqual(directoryAncestorIds(directories, null), []);
+});
+
+test("initialCollapsedDirectoryIds starts with every directory closed except the selected path", () => {
+  assert.deepEqual([...initialCollapsedDirectoryIds(directories)], ["network", "linux", "tcp", "congestion", "orphan"]);
+  assert.deepEqual([...initialCollapsedDirectoryIds(directories, ["network", "tcp"])], ["linux", "congestion", "orphan"]);
 });
