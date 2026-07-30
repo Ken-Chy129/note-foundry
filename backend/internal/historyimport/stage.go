@@ -393,6 +393,7 @@ func renderStageReport(manifest StageManifest) string {
 		countsByCode := make(map[IssueCode]int)
 		sourcesByCode := make(map[IssueCode]map[string]bool)
 		countsBySource := make(map[string]int)
+		countsByExport := make(map[string]int)
 		for _, issue := range manifest.Issues {
 			countsByCode[issue.Code]++
 			if sourcesByCode[issue.Code] == nil {
@@ -400,6 +401,7 @@ func renderStageReport(manifest StageManifest) string {
 			}
 			sourcesByCode[issue.Code][issue.SourcePath] = true
 			countsBySource[string(issue.Code)+"\x00"+issue.SourcePath]++
+			countsByExport[string(issue.Code)+"\x00"+issueExportLabel(issue.SourcePath)]++
 		}
 		codes := make([]IssueCode, 0, len(countsByCode))
 		for code := range countsByCode {
@@ -410,6 +412,16 @@ func renderStageReport(manifest StageManifest) string {
 		report.WriteString("\n## 问题摘要\n\n")
 		for _, code := range codes {
 			report.WriteString(fmt.Sprintf("- `%s`：%d 项，影响 %d 篇文档\n", code, countsByCode[code], len(sourcesByCode[code])))
+		}
+		exportKeys := make([]string, 0, len(countsByExport))
+		for key := range countsByExport {
+			exportKeys = append(exportKeys, key)
+		}
+		sort.Strings(exportKeys)
+		report.WriteString("\n## 问题来源\n\n")
+		for _, key := range exportKeys {
+			parts := strings.SplitN(key, "\x00", 2)
+			report.WriteString(fmt.Sprintf("- `%s` / %s：%d 项\n", parts[0], parts[1], countsByExport[key]))
 		}
 		report.WriteString("\n## 受影响文档\n\n")
 		summaries := make([]issueSummary, 0, len(countsBySource))
@@ -429,4 +441,18 @@ func renderStageReport(manifest StageManifest) string {
 		report.WriteString("\n完整逐项明细见 `manifest.json`。\n")
 	}
 	return report.String()
+}
+
+func issueExportLabel(sourcePath string) string {
+	lower := strings.ToLower(sourcePath)
+	switch {
+	case strings.Contains(lower, "siyuan.zip!"):
+		return "SiYuan"
+	case strings.Contains(lower, ".lakebook!"):
+		return "语雀 lakebook"
+	case strings.Contains(lower, ".zip!"):
+		return "ZIP"
+	default:
+		return "Markdown"
+	}
 }

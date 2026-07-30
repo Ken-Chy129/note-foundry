@@ -118,34 +118,79 @@ func ClassifyDocument(document DocumentCandidate) []string {
 	if collection == "开源项目" || collection == "项目相关" {
 		return appendPath([]string{"工程实践与项目", collection}, document.Directory...)
 	}
-	if containsAny(joined, "调优实战", "committed", "used memory") {
-		return []string{"Java 与 JVM", "JVM 调优"}
-	}
 
 	if containsAny(joined, "mysql", "hologress", "hadoop", "数仓", "数据仓库", "事实表", "维表", "列式存储", "数据库容灾", "sqlite", "自增主键") {
-		return appendPath([]string{"数据库与数据工程", preferredSubdirectory(collection, document.Directory, "数据库")}, remainingPath(document.Directory)...)
+		return canonicalDatabaseDirectory(document, joined)
 	}
-	if containsAny(joined, "java", "jvm", "netty", "spring", "垃圾回收", "gc", "字节码", "内存溢出", "安全点", "finalize", "元空间", "flight record", "卡表", "记忆集") {
-		return appendPath([]string{"Java 与 JVM", preferredSubdirectory(collection, document.Directory, "JVM")}, remainingPath(document.Directory)...)
+	if containsAny(joined, "java", "jvm", "netty", "spring", "垃圾回收", "gc", "字节码", "内存溢出", "安全点", "finalize", "元空间", "flight record", "卡表", "记忆集", "调优实战", "committed", "used memory", "graalvm", "hotspot") {
+		return canonicalJavaDirectory(document, joined)
 	}
 	if containsAny(joined, "linux", "操作系统", "网络", "tcp", "https", "osi", "分布式", "raft", "paxos", "一致性哈希", "事务", "redis", "rocketmq", "sentinel", "raid", "glibc", "中间件") {
 		subdirectory := systemSubdirectory(joined)
 		return appendPath([]string{"系统、网络与分布式", subdirectory}, remainingPath(document.Directory)...)
 	}
 	if collection == "开发小贴士" || containsAny(joined, "git", "maven", "umi", "前端", "开发", "工具", "项目", "算法") {
-		return appendPath([]string{"工程实践与项目", preferredSubdirectory(collection, document.Directory, "工程实践")}, remainingPath(document.Directory)...)
+		return canonicalEngineeringDirectory(document, joined)
 	}
 	return appendPath([]string{"待整理", collection}, document.Directory...)
 }
 
-func preferredSubdirectory(collection string, original []string, fallback string) string {
-	if len(original) > 0 && strings.TrimSpace(original[0]) != "" {
-		return strings.TrimSpace(original[0])
+func canonicalDatabaseDirectory(document DocumentCandidate, joined string) []string {
+	collection := strings.TrimSpace(document.Source.Collection)
+	switch {
+	case containsAny(joined, "mysql", "自增主键"):
+		result := []string{"数据库与数据工程", "MySQL"}
+		switch {
+		case collection == "MySQL技术内幕":
+			return append(result, "技术内幕")
+		case collection == "MySQL是怎样运行的":
+			return append(result, "运行原理")
+		case containsAny(joined, "八股", "面试"):
+			return append(result, "面试")
+		default:
+			return result
+		}
+	case containsAny(joined, "hologress", "hadoop", "数仓", "数据仓库", "事实表", "维表", "列式存储"):
+		return []string{"数据库与数据工程", "数据仓库"}
+	case containsAny(joined, "数据库容灾"):
+		return []string{"数据库与数据工程", "数据库运维"}
+	default:
+		return []string{"数据库与数据工程", "数据库基础"}
 	}
-	if collection != "" && collection != "独立文档" && collection != "技术沉淀" {
-		return collection
+}
+
+func canonicalEngineeringDirectory(document DocumentCandidate, joined string) []string {
+	switch {
+	case containsAny(joined, "git"):
+		return []string{"工程实践与项目", "版本控制"}
+	case containsAny(joined, "前端", "umi"):
+		result := []string{"工程实践与项目", "前端"}
+		if len(document.Directory) > 1 && strings.TrimSpace(document.Directory[0]) == "前端" {
+			result = appendPath(result, document.Directory[1:]...)
+		}
+		return result
+	case containsAny(joined, "算法"):
+		return []string{"工程实践与项目", "算法"}
+	default:
+		return []string{"工程实践与项目", "工程实践"}
 	}
-	return fallback
+}
+
+func canonicalJavaDirectory(document DocumentCandidate, joined string) []string {
+	switch {
+	case containsAny(joined, "netty"):
+		return []string{"Java 与 JVM", "Netty"}
+	case containsAny(joined, "spring"):
+		return []string{"Java 与 JVM", "Spring"}
+	case containsAny(joined, "jvm", "虚拟机", "垃圾回收", "gc", "字节码", "内存溢出", "安全点", "finalize", "元空间", "flight record", "卡表", "记忆集", "调优实战", "committed", "used memory", "graalvm", "hotspot"):
+		result := []string{"Java 与 JVM", "JVM"}
+		if len(document.Directory) > 1 && strings.EqualFold(strings.TrimSpace(document.Directory[0]), "JVM") {
+			result = appendPath(result, document.Directory[1:]...)
+		}
+		return result
+	default:
+		return []string{"Java 与 JVM", "Java"}
+	}
 }
 
 func remainingPath(original []string) []string {

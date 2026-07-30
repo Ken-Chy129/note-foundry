@@ -81,13 +81,28 @@ func TestClassifyDocumentMapsRepresentativeSources(t *testing.T) {
 		directory []string
 	}{
 		{name: "graduation", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "毕业设计"}, Directory: []string{"G1 GC"}}, directory: []string{"毕业设计", "G1 GC"}},
-		{name: "mysql", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceSiyuan, Collection: "MySQL技术内幕"}}, directory: []string{"数据库与数据工程", "MySQL技术内幕"}},
+		{name: "mysql internals", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceSiyuan, Collection: "MySQL技术内幕"}}, directory: []string{"数据库与数据工程", "MySQL", "技术内幕"}},
+		{name: "mysql runtime", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceSiyuan, Collection: "MySQL是怎样运行的"}}, directory: []string{"数据库与数据工程", "MySQL", "运行原理"}},
+		{name: "mysql interview", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceSiyuan, Collection: "中间件学习"}, Title: "MySQL八股"}, directory: []string{"数据库与数据工程", "MySQL", "面试"}},
+		{name: "data warehouse", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "数仓分层"}, Title: "数仓分层"}, directory: []string{"数据库与数据工程", "数据仓库"}},
+		{name: "hologress", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "Hologress"}, directory: []string{"数据库与数据工程", "数据仓库"}},
+		{name: "database basics", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "时间", Directory: []string{"SQLite"}}, directory: []string{"数据库与数据工程", "数据库基础"}},
+		{name: "database operations", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "数据库容灾"}, Title: "数据库容灾"}, directory: []string{"数据库与数据工程", "数据库运维"}},
 		{name: "distributed", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "分布式事务"}}, directory: []string{"系统、网络与分布式", "分布式与中间件"}},
 		{name: "personal", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "OKR"}, directory: []string{"学习、求职与个人", "个人规划"}},
 		{name: "technical java", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "Java NIO", Directory: []string{"Java"}}, directory: []string{"Java 与 JVM", "Java"}},
-		{name: "jvm tuning", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "调优实战"}, directory: []string{"Java 与 JVM", "JVM 调优"}},
-		{name: "memory metrics", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "内存committed和used"}, directory: []string{"Java 与 JVM", "JVM 调优"}},
-		{name: "database problem", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "自增主键问题", Directory: []string{"问题"}}, directory: []string{"数据库与数据工程", "问题"}},
+		{name: "jvm tuning", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "调优实战"}, directory: []string{"Java 与 JVM", "JVM"}},
+		{name: "memory metrics", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceMarkdown, Collection: "独立文档"}, Title: "内存committed和used"}, directory: []string{"Java 与 JVM", "JVM"}},
+		{name: "garbage collection", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "垃圾回收"}, Title: "垃圾回收"}, directory: []string{"Java 与 JVM", "JVM"}},
+		{name: "remembered set", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "卡表和记忆集"}, Title: "卡表和记忆集"}, directory: []string{"Java 与 JVM", "JVM"}},
+		{name: "spring boot tip", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceZip, Collection: "开发小贴士"}, Title: "SpringBoot相关"}, directory: []string{"Java 与 JVM", "Spring"}},
+		{name: "spring tip", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "Spring相关", Directory: []string{"开发贴士"}}, directory: []string{"Java 与 JVM", "Spring"}},
+		{name: "spring problem", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "程序包org.springframework.jdbc.core不存在", Directory: []string{"问题"}}, directory: []string{"Java 与 JVM", "Spring"}},
+		{name: "java tip", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "Java相关", Directory: []string{"开发贴士"}}, directory: []string{"Java 与 JVM", "Java"}},
+		{name: "nested jvm implementation", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "概念", Directory: []string{"JVM", "GraalVM"}}, directory: []string{"Java 与 JVM", "JVM", "GraalVM"}},
+		{name: "git tip", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "git超时", Directory: []string{"开发贴士"}}, directory: []string{"工程实践与项目", "版本控制"}},
+		{name: "engineering tip", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "日志系统", Directory: []string{"开发贴士"}}, directory: []string{"工程实践与项目", "工程实践"}},
+		{name: "database problem", document: DocumentCandidate{Source: SourceDescriptor{Kind: SourceLakebook, Collection: "技术沉淀"}, Title: "自增主键问题", Directory: []string{"问题"}}, directory: []string{"数据库与数据工程", "MySQL"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

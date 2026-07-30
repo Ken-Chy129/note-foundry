@@ -126,6 +126,7 @@ func TestRenderStageReportGroupsIssuesByCodeAndSource(t *testing.T) {
 	for _, expected := range []string{
 		"`empty_document`：1 项，影响 1 篇文档",
 		"`missing_asset`：2 项，影响 1 篇文档",
+		"`missing_asset` / Markdown：2 项",
 		"`missing_asset` one.md：2 项",
 		"完整逐项明细见 `manifest.json`",
 	} {
