@@ -67,3 +67,16 @@ test("the owner workspace lives only at /workspace", () => {
   assert.match(apiMain, /PostLoginPath:\s+"\/workspace"/);
   assert.doesNotMatch(`${identityHTTP}\n${apiMain}`, /"\/app"/);
 });
+
+test("the workspace note list owns a shrinkable vertical scroll area", () => {
+  const styles = source("src/app/globals.css");
+
+  assert.match(
+    styles,
+    /\.workspace-sidebar\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s
+  );
+  assert.match(
+    styles,
+    /\.note-navigation\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto;[^}]*overflow-y:\s*auto;/s
+  );
+});
