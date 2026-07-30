@@ -1,7 +1,8 @@
 "use client";
 
-import { BookOpen, ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
+import { ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import type { Directory, KnowledgeSpace, LearningNote } from "@/lib/types";
+import { WorkspaceDirectoryTree } from "@/components/workspace/WorkspaceDirectoryTree";
 
 interface KnowledgeSidebarProps {
   spaces: KnowledgeSpace[];
@@ -16,11 +17,6 @@ interface KnowledgeSidebarProps {
   onCreateNote: () => void;
   onOpenSearch: () => void;
   onOpenTrash: () => void;
-}
-
-function notePath(note: LearningNote, directories: Directory[]): string {
-  if (!note.directoryId) return "根目录";
-  return directories.find((directory) => directory.id === note.directoryId)?.name ?? "目录";
 }
 
 export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
@@ -54,27 +50,13 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
       </div>
 
       <div className="sidebar-heading sidebar-heading-notes">
-        <span>学习笔记</span>
+        <span>目录与笔记</span>
         <div>
           <button className="icon-button" onClick={props.onCreateDirectory} aria-label="创建目录" disabled={!props.selectedSpaceId}><FolderPlus size={16} /></button>
           <button className="icon-button" onClick={props.onCreateNote} aria-label="创建学习笔记" disabled={!props.selectedSpaceId}><Plus size={17} /></button>
         </div>
       </div>
-      <div className="note-navigation" role="list">
-        {props.notes.length === 0 && <p className="sidebar-empty">在这个空间中创建第一篇学习笔记。</p>}
-        {props.notes.map((note) => (
-          <button
-            role="listitem"
-            key={note.id}
-            className={note.id === props.selectedNoteId ? "is-active" : ""}
-            onClick={() => props.onSelectNote(note)}
-          >
-            <BookOpen size={15} />
-            <span><strong>{note.title}</strong><small>{notePath(note, props.directories)}</small></span>
-            {note.published && <i title="已发布" />}
-          </button>
-        ))}
-      </div>
+      <WorkspaceDirectoryTree directories={props.directories} notes={props.notes} selectedNoteId={props.selectedNoteId} onSelectNote={props.onSelectNote} />
       <button className="trash-link" onClick={props.onOpenTrash}><Trash2 size={15} /> 回收站</button>
     </aside>
   );
