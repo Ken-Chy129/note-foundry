@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ChevronRight, FolderPlus, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { BookOpen, ChevronRight, FolderPlus, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import type { Directory, KnowledgeSpace, LearningNote } from "@/lib/types";
 
 interface KnowledgeSidebarProps {
@@ -14,6 +14,7 @@ interface KnowledgeSidebarProps {
   onCreateSpace: () => void;
   onCreateDirectory: () => void;
   onCreateNote: () => void;
+  onOpenSearch: () => void;
   onOpenTrash: () => void;
 }
 
@@ -26,6 +27,13 @@ export function KnowledgeSidebar(props: KnowledgeSidebarProps) {
   return (
     <aside className="workspace-sidebar" aria-label="知识导航">
       <div className="workspace-brand"><span>NF</span><strong>NoteFoundry</strong></div>
+      <div className="sidebar-search-area">
+        <button className="sidebar-search-button" onClick={props.onOpenSearch}>
+          <Search size={15} />
+          <span>搜索笔记</span>
+          <kbd>⌘K</kbd>
+        </button>
+      </div>
       <div className="sidebar-heading">
         <span>知识空间</span>
         <button className="icon-button" onClick={props.onCreateSpace} aria-label="创建知识空间"><Plus size={17} /></button>
