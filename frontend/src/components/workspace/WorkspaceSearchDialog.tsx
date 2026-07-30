@@ -130,7 +130,7 @@ export function WorkspaceSearchDialog({ spaces, onClose, onSelectResult }: Works
           ))}
         </div>
 
-        <footer className="workspace-search-footer"><kbd>Enter</kbd> 搜索 <span /> <kbd>Esc</kbd> 关闭</footer>
+        <footer className="workspace-search-footer"><kbd>Enter</kbd> 搜索 <span aria-hidden="true">·</span> <kbd>Esc</kbd> 关闭</footer>
       </div>
     </WorkspaceDialog>
   );

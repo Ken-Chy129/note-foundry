@@ -132,6 +132,11 @@ test("workspace search opens from the sidebar and keeps results in a bounded scr
     styles,
     /\.workspace-search-results\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
   );
+  assert.match(styles, /\.workspace-search-dialog\s*>\s*header\s*\{[^}]*border-bottom:\s*0;/s);
+  assert.match(styles, /\.workspace-search-field\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.workspace-search-context\s*\{[^}]*border-bottom:\s*0;/s);
+  assert.match(styles, /\.workspace-search-result\s*\{[^}]*border:\s*0;/s);
+  assert.match(styles, /\.workspace-search-footer\s*\{[^}]*border-top:\s*0;/s);
 });
 
 test("the workspace sidebar renders notes in an accessible nested directory tree", () => {
@@ -154,6 +159,7 @@ test("the workspace sidebar renders notes in an accessible nested directory tree
 test("the workspace opens compactly with readable tree type and consistent NoteFoundry branding", () => {
   const tree = source("src/components/workspace/WorkspaceDirectoryTree.tsx");
   const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
+  const workspace = source("src/components/workspace/WorkspaceApp.tsx");
   const siteHeader = source("src/components/public/SiteHeader.tsx");
   const layout = source("src/app/layout.tsx");
   const styles = source("src/app/globals.css");
@@ -163,8 +169,12 @@ test("the workspace opens compactly with readable tree type and consistent NoteF
   assert.match(tree, /initialCollapsedDirectoryIds/);
   assert.match(styles, /\.workspace-root\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*font-family:\s*var\(--font-cjk\);[^}]*text-rendering:\s*auto;/s);
   assert.match(styles, /\.sidebar-heading\s*\{[^}]*font-size:\s*11px;/s);
-  assert.match(styles, /\.directory-tree-row span\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*600;/s);
-  assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/s);
+  assert.match(styles, /\.directory-tree-row span\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/s);
+  assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*400;/s);
+  assert.match(workspace, /className="workspace-space-meta"/);
+  assert.match(styles, /\.workspace-space-meta\s*\{[^}]*display:\s*flex;[^}]*white-space:\s*nowrap;/s);
+  assert.match(styles, /\.workspace-space-meta strong\s*\{[^}]*font-size:\s*15px;[^}]*font-weight:\s*500;/s);
+  assert.match(styles, /\.workspace-space-meta span\s*\{[^}]*font-size:\s*12px;/s);
   assert.equal(existsSync(logoPath), true);
   assert.equal(existsSync(iconPath), true);
   assert.match(sidebar, /<NoteFoundryLogo/);
