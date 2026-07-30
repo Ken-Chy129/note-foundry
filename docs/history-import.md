@@ -70,6 +70,49 @@ go run ./cmd/historyapply -staging /path/to/staging -apply
 
 命令会在整理包内原子维护 `apply-state.json`。中断后使用相同命令可续传；它会校验整个整理包摘要，并从已经完成的 Knowledge Space、Directory、Learning Note 和 Attachment 写入中恢复，不重复创建。应在导入完成后将 `apply-state.json` 与 `manifest.json` 一起保存，作为后续补附件时的来源到 Note ID 映射。
 
+## 补回已导入文档的缺失图片
+
+已导入的 Learning Note 如果后来找回了原图，应单独制作高置信恢复包，而不是重新执行整批历史导入。恢复包只接受 `confidence: "high"` 的文档，每个映射必须包含现有 Note ID、原 Markdown 中唯一的 `assets/...` 引用、恢复文件相对路径和 SHA-256：
+
+```json
+{
+  "version": 1,
+  "documents": [
+    {
+      "key": "stable-source-key",
+      "noteId": "existing-note-uuid",
+      "title": "现有标题",
+      "confidence": "high",
+      "mappings": [
+        {
+          "missingReference": "assets/original.png",
+          "file": "files/original.png",
+          "sha256": "..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+默认命令只校验清单、路径、文件大小、SHA-256 和实际图片媒体类型：
+
+```bash
+go run ./cmd/historyrecover -bundle /path/to/recovery-bundle
+```
+
+实际恢复必须显式使用 `-apply`：
+
+```bash
+DATABASE_URL=... \
+ATTACHMENTS_DIR=/var/lib/notefoundry/attachments \
+go run ./cmd/historyrecover -bundle /path/to/recovery-bundle -apply
+```
+
+命令会先只读校验整个批次中的 Note 标题和引用，任何笔记不匹配时都在上传前停止。写入时复用 Attachment 和 Note 服务：上传文件后把精确的 `assets/...` 替换为 `attachment:<uuid>`，每篇 Note 只 autosave 一次，不触发 publish，也不修改 Published Content。`recovery-state.json` 记录每个引用对应的 Attachment ID；重试时还会通过同 Note、原文件名和 SHA-256 找回“附件已上传但状态尚未落盘”的进度。
+
+低置信或仅凭图片顺序猜测的候选不应进入恢复包，应保留给人工逐图确认。
+
 安全的应用顺序如下：
 
 1. 对当前实例执行一次真实加密备份，并验证备份产物可读。
