@@ -112,6 +112,7 @@ func (service *Service) CreateNote(ctx context.Context, spaceID, directoryID, ti
 	if err != nil {
 		return nil, err
 	}
+	note.markUpdatedAt(service.now())
 	if err := service.notes.CreateNote(ctx, note); err != nil {
 		return nil, fmt.Errorf("create Learning Note: %w", err)
 	}
@@ -167,6 +168,7 @@ func (service *Service) Autosave(ctx context.Context, id string, expectedVersion
 	if err := service.notes.UpdateDraft(ctx, note, expectedVersion); err != nil {
 		return nil, fmt.Errorf("save Learning Note draft: %w", err)
 	}
+	note.markUpdatedAt(service.now())
 	if err := service.replaceCurrentLinks(ctx, note); err != nil {
 		return nil, err
 	}
@@ -192,13 +194,15 @@ func (service *Service) Publish(ctx context.Context, id string, expectedVersion 
 		return nil, ErrPrivateNotePublish
 	}
 
-	revision, err := note.Publish(service.generateID(), service.now())
+	updatedAt := service.now()
+	revision, err := note.Publish(service.generateID(), updatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if err := service.notes.Publish(ctx, note, revision); err != nil {
 		return nil, fmt.Errorf("publish Learning Note: %w", err)
 	}
+	note.markUpdatedAt(updatedAt)
 	if err := service.replacePublishedLinks(ctx, note); err != nil {
 		return nil, err
 	}
@@ -243,9 +247,10 @@ func (service *Service) Move(ctx context.Context, id, targetSpaceID, targetDirec
 	if err := note.Relocate(targetSpaceID, targetDirectoryID); err != nil {
 		return nil, err
 	}
+	updatedAt := service.now()
 	var revision *Revision
 	if becamePublic {
-		publishedRevision, err := note.Publish(service.generateID(), service.now())
+		publishedRevision, err := note.Publish(service.generateID(), updatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -256,6 +261,7 @@ func (service *Service) Move(ctx context.Context, id, targetSpaceID, targetDirec
 	if err := service.notes.Move(ctx, note, revision, expectedVersion); err != nil {
 		return nil, fmt.Errorf("move Learning Note: %w", err)
 	}
+	note.markUpdatedAt(updatedAt)
 	if revision != nil {
 		if err := service.replacePublishedLinks(ctx, note); err != nil {
 			return nil, err
@@ -302,13 +308,15 @@ func (service *Service) Restore(ctx context.Context, id, revisionID string, expe
 	if err != nil {
 		return nil, fmt.Errorf("load Note Revision: %w", err)
 	}
-	checkpoint, err := note.Restore(expectedVersion, target, service.generateID(), service.now())
+	updatedAt := service.now()
+	checkpoint, err := note.Restore(expectedVersion, target, service.generateID(), updatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if err := service.notes.Restore(ctx, note, checkpoint, expectedVersion); err != nil {
 		return nil, fmt.Errorf("restore Note Revision: %w", err)
 	}
+	note.markUpdatedAt(updatedAt)
 	if err := service.replaceCurrentLinks(ctx, note); err != nil {
 		return nil, err
 	}
@@ -365,12 +373,13 @@ func (service *Service) RestoreFromTrash(ctx context.Context, id string, input R
 	if err := entry.Note.Relocate(spaceID, directoryID); err != nil {
 		return nil, err
 	}
+	updatedAt := service.now()
 	var revision *Revision
 	if space.Visibility() == knowledge.VisibilityPublic {
 		if !input.ConfirmPublish {
 			return nil, ErrPublicRestoreConfirmationRequired
 		}
-		publishedRevision, err := entry.Note.Publish(service.generateID(), service.now())
+		publishedRevision, err := entry.Note.Publish(service.generateID(), updatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -381,6 +390,7 @@ func (service *Service) RestoreFromTrash(ctx context.Context, id string, input R
 	if err := service.notes.RestoreFromTrash(ctx, entry.Note, revision); err != nil {
 		return nil, fmt.Errorf("restore Learning Note from Trash: %w", err)
 	}
+	entry.Note.markUpdatedAt(updatedAt)
 	if err := service.replaceCurrentLinks(ctx, entry.Note); err != nil {
 		return nil, err
 	}

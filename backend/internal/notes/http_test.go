@@ -130,6 +130,7 @@ func TestHTTPHandlerCreatesListsAndRestoresNoteRevision(t *testing.T) {
 
 func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) {
 	note, _ := NewNote("33333333-3333-4333-8333-333333333333", "11111111-1111-4111-8111-111111111111", "", "Draft title", "unfinished secret draft")
+	note.updatedAt = time.Date(2026, 7, 30, 12, 34, 0, 0, time.UTC)
 	published := PublishedNote{
 		ID:       note.ID(),
 		SpaceID:  note.SpaceID(),
@@ -155,7 +156,7 @@ func TestHTTPHandlerSeparatesOwnerAndAnonymousNoteRepresentations(t *testing.T) 
 	ownerRequest := httptest.NewRequest(http.MethodGet, "/api/v1/notes?spaceId=11111111-1111-4111-8111-111111111111&page=1&pageSize=20", nil)
 	ownerResponse := httptest.NewRecorder()
 	mux.ServeHTTP(ownerResponse, ownerRequest)
-	if ownerResponse.Code != http.StatusOK || !strings.Contains(ownerResponse.Body.String(), "unfinished secret draft") {
+	if ownerResponse.Code != http.StatusOK || !strings.Contains(ownerResponse.Body.String(), "unfinished secret draft") || !strings.Contains(ownerResponse.Body.String(), `"updatedAt":"2026-07-30T12:34:00.000000000Z"`) {
 		t.Fatalf("owner response = %d %s", ownerResponse.Code, ownerResponse.Body.String())
 	}
 

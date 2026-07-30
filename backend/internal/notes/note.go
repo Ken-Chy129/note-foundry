@@ -52,6 +52,7 @@ type Note struct {
 	markdown    string
 	version     int64
 	published   *PublishedContent
+	updatedAt   time.Time
 }
 
 func NewNote(id, spaceID, directoryID, title, markdown string) (*Note, error) {
@@ -108,6 +109,14 @@ func (note *Note) Version() int64 {
 
 func (note *Note) Published() *PublishedContent {
 	return note.published
+}
+
+func (note *Note) UpdatedAt() time.Time {
+	return note.updatedAt
+}
+
+func (note *Note) markUpdatedAt(updatedAt time.Time) {
+	note.updatedAt = updatedAt
 }
 
 func (note *Note) Autosave(expectedVersion int64, title, markdown string) error {

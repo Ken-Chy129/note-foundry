@@ -29,6 +29,7 @@ export interface LearningNote {
   markdown: string;
   version: number;
   published: PublishedContent | null;
+  updatedAt: string;
 }
 
 export interface PublishedNote {
@@ -71,6 +72,7 @@ export interface SearchResult {
   slug: string;
   snippet: string;
   rank: number;
+  updatedAt: string;
 }
 
 export interface Pagination {

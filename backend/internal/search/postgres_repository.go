@@ -143,6 +143,7 @@ func (repository *PostgresRepository) search(ctx context.Context, options Option
 	bodyColumn := "document.current_body"
 	vectorColumn := "document.current_vector"
 	textColumn := "document.current_text"
+	updatedAtColumn := "learning_notes.updated_at"
 	if public {
 		visibilityJoin = "JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id"
 		visibilityPredicate = "AND knowledge_spaces.visibility = 'public' AND learning_notes.published_at IS NOT NULL AND document.published_available"
@@ -151,6 +152,7 @@ func (repository *PostgresRepository) search(ctx context.Context, options Option
 		bodyColumn = "document.published_body"
 		vectorColumn = "document.published_vector"
 		textColumn = "document.published_text"
+		updatedAtColumn = "learning_notes.published_at"
 	}
 	predicate := fmt.Sprintf(`
 		FROM note_search_documents document
@@ -178,6 +180,7 @@ func (repository *PostgresRepository) search(ctx context.Context, options Option
 			%s,
 			%s,
 			left(%s, 320),
+			%s,
 			(
 				ts_rank_cd(%s, websearch_to_tsquery('simple'::regconfig, $1)) * 4
 				+ similarity(%s, $1)
@@ -186,7 +189,7 @@ func (repository *PostgresRepository) search(ctx context.Context, options Option
 		%s
 		ORDER BY rank DESC, lower(%s), document.note_id
 		LIMIT $4 OFFSET $5
-	`, titleColumn, slugColumn, bodyColumn, vectorColumn, textColumn, textColumn, predicate, titleColumn)
+	`, titleColumn, slugColumn, bodyColumn, updatedAtColumn, vectorColumn, textColumn, textColumn, predicate, titleColumn)
 	rows, err := repository.pool.Query(ctx, query, options.Query, spaceID, tagID, options.PageSize, (options.Page-1)*options.PageSize)
 	if err != nil {
 		return Page{}, fmt.Errorf("query search results: %w", err)
@@ -195,7 +198,7 @@ func (repository *PostgresRepository) search(ctx context.Context, options Option
 	results := make([]Result, 0, options.PageSize)
 	for rows.Next() {
 		var result Result
-		if err := rows.Scan(&result.ID, &result.SpaceID, &result.Title, &result.Slug, &result.Snippet, &result.Rank); err != nil {
+		if err := rows.Scan(&result.ID, &result.SpaceID, &result.Title, &result.Slug, &result.Snippet, &result.UpdatedAt, &result.Rank); err != nil {
 			return Page{}, fmt.Errorf("scan search result: %w", err)
 		}
 		results = append(results, result)

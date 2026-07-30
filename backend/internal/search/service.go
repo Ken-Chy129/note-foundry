@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var ErrQueryRequired = errors.New("search query is required")
@@ -18,12 +19,13 @@ type Options struct {
 }
 
 type Result struct {
-	ID      string
-	SpaceID string
-	Title   string
-	Slug    string
-	Snippet string
-	Rank    float64
+	ID        string
+	SpaceID   string
+	Title     string
+	Slug      string
+	Snippet   string
+	Rank      float64
+	UpdatedAt time.Time
 }
 
 type Page struct {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
 )
@@ -25,12 +26,13 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type resultResponse struct {
-	ID      string  `json:"id"`
-	SpaceID string  `json:"spaceId"`
-	Title   string  `json:"title"`
-	Slug    string  `json:"slug"`
-	Snippet string  `json:"snippet"`
-	Rank    float64 `json:"rank"`
+	ID        string  `json:"id"`
+	SpaceID   string  `json:"spaceId"`
+	Title     string  `json:"title"`
+	Slug      string  `json:"slug"`
+	Snippet   string  `json:"snippet"`
+	Rank      float64 `json:"rank"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 func (handler *HTTPHandler) searchOwner(response http.ResponseWriter, request *http.Request) {
@@ -75,7 +77,7 @@ func (handler *HTTPHandler) runSearch(response http.ResponseWriter, request *htt
 	}
 	data := make([]resultResponse, 0, len(result.Results))
 	for _, item := range result.Results {
-		data = append(data, resultResponse{ID: item.ID, SpaceID: item.SpaceID, Title: item.Title, Slug: item.Slug, Snippet: item.Snippet, Rank: item.Rank})
+		data = append(data, resultResponse{ID: item.ID, SpaceID: item.SpaceID, Title: item.Title, Slug: item.Slug, Snippet: item.Snippet, Rank: item.Rank, UpdatedAt: formatSearchTime(item.UpdatedAt)})
 	}
 	totalPages := 0
 	if result.TotalItems > 0 {
@@ -90,6 +92,10 @@ func (handler *HTTPHandler) runSearch(response http.ResponseWriter, request *htt
 			"totalPages": totalPages,
 		},
 	})
+}
+
+func formatSearchTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 }
 
 func searchPaginationValue(request *http.Request, key string, fallback, minimum, maximum int) (int, error) {
