@@ -169,7 +169,7 @@ test("workspace note navigation loads lightweight summaries and fetches full con
   assert.doesNotMatch(workspace, /PageResponse<LearningNote>>\(`\/api\/v1\/notes\?spaceId=/);
 });
 
-test("v0.2 workspace exposes a private manual Source Inbox", () => {
+test("v0.2 workspace exposes a private Source Inbox with manual and URL capture", () => {
   const workspace = source("src/components/workspace/WorkspaceApp.tsx");
   const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
   const types = source("src/lib/types.ts");
@@ -190,6 +190,13 @@ test("v0.2 workspace exposes a private manual Source Inbox", () => {
   assert.match(sourceInbox, /method:\s*"POST"/);
   assert.match(sourceInbox, /method:\s*"PATCH"/);
   assert.match(sourceInbox, /kind:\s*"manual"/);
+  assert.match(sourceInbox, /kind:\s*"url"/);
+  assert.match(sourceInbox, /originalUrl/);
+  assert.match(sourceInbox, /网页链接/);
+  assert.match(sourceInbox, /等待提取/);
+  assert.match(sourceInbox, /retry-extraction/);
+  assert.match(sourceInbox, /重新提取/);
+  assert.match(sourceInbox, /target="_blank" rel="noreferrer"/);
   assert.match(sourceInbox, /所属位置/);
   assert.match(sourceInbox, /移回资料收件箱/);
   assert.match(sourceInbox, /保存备注/);

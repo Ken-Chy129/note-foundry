@@ -52,6 +52,7 @@ export interface LearningSourceSummary {
   spaceId: string | null;
   title: string;
   captureNote: string;
+  originalUrl: string | null;
   processingStatus: LearningSourceProcessingStatus;
   createdAt: string;
   updatedAt: string;
@@ -59,6 +60,8 @@ export interface LearningSourceSummary {
 
 export interface LearningSource extends LearningSourceSummary {
   content: string;
+  normalizedUrl: string | null;
+  failureMessage: string | null;
 }
 
 export interface PublishedNote {
