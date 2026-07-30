@@ -24,6 +24,8 @@ cd backend && go test ./... && go vet ./...
 cd ../frontend && npm ci && npm run typecheck && npm run lint && npm run build
 ```
 
+历史 Markdown、ZIP、SiYuan 和语雀 `.lakebook` 的整理与迁移流程见 [docs/history-import.md](./docs/history-import.md)。
+
 ## 版本路线
 
 - **v0.1：知识管理核心** — 知识空间、目录、Markdown 笔记、草稿与发布、修订、标签、链接与反向链接、全文搜索、公开阅读、回收站、附件和自动备份。
