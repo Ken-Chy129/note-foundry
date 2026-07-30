@@ -71,6 +71,28 @@ func TestScanSourceDirectoryReportsMissingZipAsset(t *testing.T) {
 	}
 }
 
+func TestScanSourceDirectoryRegistersRemoteMarkdownImages(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "remote.md"), []byte("# Remote\n\n![图](https://images.example.com/a.png)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	documents, issues, err := ScanSourceDirectory(context.Background(), source)
+	if err != nil {
+		t.Fatalf("ScanSourceDirectory() error = %v", err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("ScanSourceDirectory() issues = %+v", issues)
+	}
+	if len(documents) != 1 || len(documents[0].Assets) != 1 {
+		t.Fatalf("ScanSourceDirectory() documents = %+v", documents)
+	}
+	asset := documents[0].Assets[0]
+	if asset.RemoteURL != "https://images.example.com/a.png" || asset.Name != "a.png" {
+		t.Fatalf("remote asset = %+v", asset)
+	}
+}
+
 func findDocument(t *testing.T, documents []DocumentCandidate, title string) DocumentCandidate {
 	t.Helper()
 	for _, document := range documents {

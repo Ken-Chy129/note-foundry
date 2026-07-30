@@ -25,7 +25,7 @@ func PrepareDocuments(candidates []DocumentCandidate) PrepareResult {
 	titleKeys := make([]string, len(prepared))
 	shingles := make([]map[string]struct{}, len(prepared))
 	for index, document := range prepared {
-		normalized[index] = normalizedDocumentText(document.Markdown)
+		normalized[index] = normalizedDocumentBody(document.Markdown)
 		titleKeys[index] = normalizedTitle(document.Title)
 		shingles[index] = textShingles(normalized[index], 5)
 	}
@@ -41,7 +41,7 @@ func PrepareDocuments(candidates []DocumentCandidate) PrepareResult {
 			}
 			similarity := containmentSimilarity(shingles[left], shingles[right])
 			sameTitle := titleKeys[left] != "" && titleKeys[left] == titleKeys[right]
-			if normalized[left] == normalized[right] || (sameTitle && similarity >= 0.85) || (!sameTitle && similarity >= 0.97) {
+			if normalized[left] == normalized[right] || (sameTitle && similarity >= 0.85) {
 				groups.union(left, right)
 			}
 		}
@@ -74,7 +74,7 @@ func PrepareDocuments(candidates []DocumentCandidate) PrepareResult {
 			}
 			result.Duplicates = append(result.Duplicates, duplicate)
 		}
-		if strings.TrimSpace(kept.Markdown) == "" {
+		if normalized[keptIndex] == "" {
 			result.Issues = append(result.Issues, ScanIssue{
 				Code:       IssueEmptyDocument,
 				SourcePath: kept.Source.Path,
@@ -118,8 +118,11 @@ func ClassifyDocument(document DocumentCandidate) []string {
 	if collection == "开源项目" || collection == "项目相关" {
 		return appendPath([]string{"工程实践与项目", collection}, document.Directory...)
 	}
+	if containsAny(joined, "调优实战", "committed", "used memory") {
+		return []string{"Java 与 JVM", "JVM 调优"}
+	}
 
-	if containsAny(joined, "mysql", "hologress", "hadoop", "数仓", "数据仓库", "事实表", "维表", "列式存储", "数据库容灾", "sqlite") {
+	if containsAny(joined, "mysql", "hologress", "hadoop", "数仓", "数据仓库", "事实表", "维表", "列式存储", "数据库容灾", "sqlite", "自增主键") {
 		return appendPath([]string{"数据库与数据工程", preferredSubdirectory(collection, document.Directory, "数据库")}, remainingPath(document.Directory)...)
 	}
 	if containsAny(joined, "java", "jvm", "netty", "spring", "垃圾回收", "gc", "字节码", "内存溢出", "安全点", "finalize", "元空间", "flight record", "卡表", "记忆集") {
@@ -224,9 +227,19 @@ func normalizedTitle(title string) string {
 	return builder.String()
 }
 
-func normalizedDocumentText(markdown string) string {
+func normalizedDocumentBody(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	headingRemoved := false
+	for index, line := range lines {
+		if !headingRemoved && firstHeadingPattern.MatchString(line) {
+			lines[index] = ""
+			headingRemoved = true
+			break
+		}
+	}
+
 	var builder strings.Builder
-	for _, character := range strings.ToLower(markdown) {
+	for _, character := range strings.ToLower(strings.Join(lines, "\n")) {
 		if unicode.IsLetter(character) || unicode.IsDigit(character) {
 			builder.WriteRune(character)
 		}

@@ -74,7 +74,7 @@ func WriteStaging(ctx context.Context, outputDirectory string, prepared PrepareR
 		GeneratedAt: time.Now().UTC(),
 		Space:       StageSpace{Name: "历史文档", Visibility: "private"},
 		Duplicates:  prepared.Duplicates,
-		Issues:      append(append([]ScanIssue(nil), scanIssues...), prepared.Issues...),
+		Issues:      filteredIssues(prepared, scanIssues),
 	}
 
 	for _, document := range prepared.Documents {
@@ -101,6 +101,30 @@ func WriteStaging(ctx context.Context, outputDirectory string, prepared PrepareR
 		return StageManifest{}, err
 	}
 	return manifest, nil
+}
+
+func filteredIssues(prepared PrepareResult, scanIssues []ScanIssue) []ScanIssue {
+	discardedPaths := make(map[string]bool)
+	for _, duplicate := range prepared.Duplicates {
+		for _, discarded := range duplicate.Discarded {
+			discardedPaths[discarded.Path] = true
+		}
+	}
+	combined := append(append([]ScanIssue(nil), scanIssues...), prepared.Issues...)
+	result := make([]ScanIssue, 0, len(combined))
+	seen := make(map[string]bool)
+	for _, issue := range combined {
+		if discardedPaths[issue.SourcePath] {
+			continue
+		}
+		key := string(issue.Code) + "\x00" + issue.SourcePath + "\x00" + issue.Reference + "\x00" + issue.Message
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, issue)
+	}
+	return result
 }
 
 func (fetcher HTTPAssetFetcher) Fetch(ctx context.Context, rawURL string) ([]byte, string, error) {
@@ -361,10 +385,48 @@ func renderStageReport(manifest StageManifest) string {
 		report.WriteString(fmt.Sprintf("- %s：%d 篇\n", directory, directoryCounts[directory]))
 	}
 	if len(manifest.Issues) > 0 {
-		report.WriteString("\n## 问题清单\n\n")
-		for _, issue := range manifest.Issues {
-			report.WriteString(fmt.Sprintf("- `%s` %s：%s\n", issue.Code, issue.SourcePath, issue.Message))
+		type issueSummary struct {
+			Code       IssueCode
+			SourcePath string
+			Count      int
 		}
+		countsByCode := make(map[IssueCode]int)
+		sourcesByCode := make(map[IssueCode]map[string]bool)
+		countsBySource := make(map[string]int)
+		for _, issue := range manifest.Issues {
+			countsByCode[issue.Code]++
+			if sourcesByCode[issue.Code] == nil {
+				sourcesByCode[issue.Code] = make(map[string]bool)
+			}
+			sourcesByCode[issue.Code][issue.SourcePath] = true
+			countsBySource[string(issue.Code)+"\x00"+issue.SourcePath]++
+		}
+		codes := make([]IssueCode, 0, len(countsByCode))
+		for code := range countsByCode {
+			codes = append(codes, code)
+		}
+		sort.Slice(codes, func(left, right int) bool { return codes[left] < codes[right] })
+
+		report.WriteString("\n## 问题摘要\n\n")
+		for _, code := range codes {
+			report.WriteString(fmt.Sprintf("- `%s`：%d 项，影响 %d 篇文档\n", code, countsByCode[code], len(sourcesByCode[code])))
+		}
+		report.WriteString("\n## 受影响文档\n\n")
+		summaries := make([]issueSummary, 0, len(countsBySource))
+		for key, count := range countsBySource {
+			parts := strings.SplitN(key, "\x00", 2)
+			summaries = append(summaries, issueSummary{Code: IssueCode(parts[0]), SourcePath: parts[1], Count: count})
+		}
+		sort.Slice(summaries, func(left, right int) bool {
+			if summaries[left].Code == summaries[right].Code {
+				return summaries[left].SourcePath < summaries[right].SourcePath
+			}
+			return summaries[left].Code < summaries[right].Code
+		})
+		for _, summary := range summaries {
+			report.WriteString(fmt.Sprintf("- `%s` %s：%d 项\n", summary.Code, summary.SourcePath, summary.Count))
+		}
+		report.WriteString("\n完整逐项明细见 `manifest.json`。\n")
 	}
 	return report.String()
 }

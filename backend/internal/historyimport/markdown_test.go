@@ -21,9 +21,9 @@ func TestNormalizeMarkdownPreservesFencedCodeWhitespace(t *testing.T) {
 }
 
 func TestNormalizeMarkdownNormalizesKnownFenceLanguagesOnly(t *testing.T) {
-	input := "```Java\nclass Example {}\n```\n\n```Bash\necho ok\n```\n\n```custom value\nkeep\n```\n"
+	input := "```Java\nclass Example {}\n```\n\n```Bash\necho ok\n```\n\n```plain\ntext\n```\n\n```Kotlin\nfun main() {}\n```\n\n```C++\nint main() {}\n```\n\n```custom value\nkeep\n```\n"
 
-	want := "```java\nclass Example {}\n```\n\n```bash\necho ok\n```\n\n```custom value\nkeep\n```\n"
+	want := "```java\nclass Example {}\n```\n\n```bash\necho ok\n```\n\n```text\ntext\n```\n\n```kotlin\nfun main() {}\n```\n\n```cpp\nint main() {}\n```\n\n```custom value\nkeep\n```\n"
 	if got := NormalizeMarkdown(input); got != want {
 		t.Fatalf("NormalizeMarkdown() = %q, want %q", got, want)
 	}

@@ -91,6 +91,50 @@ func TestWriteStagingRefusesNonEmptyOutputDirectory(t *testing.T) {
 	}
 }
 
+func TestWriteStagingFiltersDiscardedAndDuplicateIssues(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "staging")
+	prepared := PrepareResult{
+		Documents:  []DocumentCandidate{{Source: SourceDescriptor{Kind: SourceLakebook, Path: "kept"}, Title: "Kept", Markdown: "# Kept\n\nBody\n"}},
+		Duplicates: []DuplicateGroup{{Kept: SourceDescriptor{Path: "kept"}, Discarded: []SourceDescriptor{{Path: "discarded"}}}},
+	}
+	issues := []ScanIssue{
+		{Code: IssueMissingAsset, SourcePath: "discarded", Reference: "old.png", Message: "missing"},
+		{Code: IssueMissingAsset, SourcePath: "kept", Reference: "same.png", Message: "missing"},
+		{Code: IssueMissingAsset, SourcePath: "kept", Reference: "same.png", Message: "missing"},
+	}
+
+	manifest, err := WriteStaging(context.Background(), output, prepared, issues, fakeAssetFetcher{})
+	if err != nil {
+		t.Fatalf("WriteStaging() error = %v", err)
+	}
+	if len(manifest.Issues) != 1 || manifest.Issues[0].SourcePath != "kept" {
+		t.Fatalf("WriteStaging() issues = %+v", manifest.Issues)
+	}
+}
+
+func TestRenderStageReportGroupsIssuesByCodeAndSource(t *testing.T) {
+	manifest := StageManifest{
+		Documents: []StageDocument{{Directory: []string{"Java 与 JVM"}}},
+		Issues: []ScanIssue{
+			{Code: IssueMissingAsset, SourcePath: "one.md", Reference: "a.png", Message: "missing"},
+			{Code: IssueMissingAsset, SourcePath: "one.md", Reference: "b.png", Message: "missing"},
+			{Code: IssueEmptyDocument, SourcePath: "empty.md", Message: "empty"},
+		},
+	}
+
+	report := renderStageReport(manifest)
+	for _, expected := range []string{
+		"`empty_document`：1 项，影响 1 篇文档",
+		"`missing_asset`：2 项，影响 1 篇文档",
+		"`missing_asset` one.md：2 项",
+		"完整逐项明细见 `manifest.json`",
+	} {
+		if !strings.Contains(report, expected) {
+			t.Fatalf("renderStageReport() missing %q:\n%s", expected, report)
+		}
+	}
+}
+
 func TestValidateRemoteAssetURLRequiresAllowedHTTPSHost(t *testing.T) {
 	allowed := map[string]bool{"cdn.nlark.com": true}
 	for _, rawURL := range []string{

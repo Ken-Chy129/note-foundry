@@ -9,9 +9,13 @@ var emptyHeadingPattern = regexp.MustCompile(`^\s{0,3}#{1,6}\s*$`)
 
 var fenceLanguages = map[string]string{
 	"bash":       "bash",
+	"c++":        "cpp",
+	"cpp":        "cpp",
 	"java":       "java",
 	"javascript": "javascript",
 	"json":       "json",
+	"kotlin":     "kotlin",
+	"plain":      "text",
 	"plain text": "text",
 	"plaintext":  "text",
 	"shell":      "shell",

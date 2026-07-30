@@ -137,7 +137,9 @@ func scanMarkdownFile(filename string) (DocumentCandidate, []ScanIssue, error) {
 		Title:    markdownTitle(markdown, strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))),
 		Markdown: markdown,
 	}
-	return document, nil, nil
+	assets, issues := scanFilesystemMarkdownAssets(filename, markdown)
+	document.Assets = assets
+	return document, issues, nil
 }
 
 func scanZipFile(filename string) ([]DocumentCandidate, []ScanIssue, error) {
@@ -211,9 +213,18 @@ func scanZipEntries(sourcePath, collection string, kind SourceKind, entries []*z
 			Markdown: markdown,
 		}
 
+		seenAssets := make(map[string]bool)
 		for _, match := range imageLinkPattern.FindAllStringSubmatch(markdown, -1) {
 			reference := match[1]
-			if isRemoteReference(reference) {
+			if seenAssets[reference] {
+				continue
+			}
+			seenAssets[reference] = true
+			if isHTTPReference(reference) {
+				document.Assets = append(document.Assets, remoteAssetCandidate(reference))
+				continue
+			}
+			if isManagedReference(reference) {
 				continue
 			}
 			resolved, resolveErr := resolveArchiveReference(entry.Name, reference)
@@ -241,6 +252,73 @@ func scanZipEntries(sourcePath, collection string, kind SourceKind, entries []*z
 		documents = append(documents, document)
 	}
 	return documents, issues, nil
+}
+
+func scanFilesystemMarkdownAssets(filename, markdown string) ([]AssetCandidate, []ScanIssue) {
+	assets := make([]AssetCandidate, 0)
+	issues := make([]ScanIssue, 0)
+	seenAssets := make(map[string]bool)
+	for _, match := range imageLinkPattern.FindAllStringSubmatch(markdown, -1) {
+		reference := match[1]
+		if seenAssets[reference] {
+			continue
+		}
+		seenAssets[reference] = true
+		if isHTTPReference(reference) {
+			assets = append(assets, remoteAssetCandidate(reference))
+			continue
+		}
+		if isManagedReference(reference) {
+			continue
+		}
+
+		resolved, err := resolveFilesystemReference(filename, reference)
+		if err != nil {
+			issues = append(issues, ScanIssue{Code: IssueMissingAsset, SourcePath: filename, Reference: reference, Message: err.Error()})
+			continue
+		}
+		content, err := readFileLimited(resolved, maxAssetBytes)
+		if err != nil {
+			issues = append(issues, ScanIssue{Code: IssueMissingAsset, SourcePath: filename, Reference: reference, Message: err.Error()})
+			continue
+		}
+		assets = append(assets, AssetCandidate{
+			Reference: reference,
+			Name:      filepath.Base(resolved),
+			MediaType: mediaTypeForName(resolved),
+			Data:      content,
+		})
+	}
+	return assets, issues
+}
+
+func resolveFilesystemReference(markdownFilename, reference string) (string, error) {
+	decoded, err := url.PathUnescape(reference)
+	if err != nil {
+		return "", fmt.Errorf("decode asset reference: %w", err)
+	}
+	decoded = strings.SplitN(decoded, "#", 2)[0]
+	decoded = strings.SplitN(decoded, "?", 2)[0]
+	if filepath.IsAbs(decoded) {
+		return "", errors.New("asset reference must be relative to the markdown file")
+	}
+	baseDirectory := filepath.Dir(markdownFilename)
+	resolved := filepath.Clean(filepath.Join(baseDirectory, filepath.FromSlash(decoded)))
+	relative, err := filepath.Rel(baseDirectory, resolved)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("asset reference escapes the markdown directory")
+	}
+	return resolved, nil
+}
+
+func remoteAssetCandidate(reference string) AssetCandidate {
+	name := remoteAssetName(reference)
+	return AssetCandidate{
+		Reference: reference,
+		Name:      name,
+		MediaType: mediaTypeForName(name),
+		RemoteURL: reference,
+	}
 }
 
 func markdownTitle(markdown, fallback string) string {
@@ -277,9 +355,14 @@ func isMarkdownPath(value string) bool {
 	return extension == ".md" || extension == ".markdown"
 }
 
-func isRemoteReference(reference string) bool {
+func isHTTPReference(reference string) bool {
 	lower := strings.ToLower(strings.TrimSpace(reference))
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "attachment:")
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+}
+
+func isManagedReference(reference string) bool {
+	lower := strings.ToLower(strings.TrimSpace(reference))
+	return strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "attachment:") || strings.HasPrefix(lower, "asset:")
 }
 
 func mediaTypeForName(name string) string {
