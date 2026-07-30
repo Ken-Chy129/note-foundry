@@ -49,6 +49,7 @@ type noteResponse struct {
 	Markdown    string                    `json:"markdown"`
 	Version     int64                     `json:"version"`
 	Published   *publishedContentResponse `json:"published"`
+	UpdatedAt   string                    `json:"updatedAt"`
 }
 
 type publishedContentResponse struct {
@@ -368,6 +369,7 @@ func toNoteResponse(note *Note) noteResponse {
 		Markdown:    note.Markdown(),
 		Version:     note.Version(),
 		Published:   published,
+		UpdatedAt:   note.UpdatedAt().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
 	}
 }
 

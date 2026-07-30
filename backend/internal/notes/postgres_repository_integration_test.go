@@ -146,6 +146,9 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if ownerPage.TotalItems != 1 || len(ownerPage.Notes) != 1 || ownerPage.Notes[0].ID() != note.ID() {
 		t.Errorf("owner note page = %+v", ownerPage)
 	}
+	if ownerPage.Notes[0].UpdatedAt().IsZero() {
+		t.Error("owner note page did not include the persisted update time")
+	}
 	publicNote, err := repository.GetPublishedNote(ctx, note.ID())
 	if err != nil {
 		t.Fatalf("GetPublishedNote() error = %v", err)

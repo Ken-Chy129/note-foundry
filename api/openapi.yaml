@@ -1595,6 +1595,7 @@ components:
         - markdown
         - version
         - published
+        - updatedAt
       properties:
         id:
           type: string
@@ -1623,6 +1624,9 @@ components:
           oneOf:
             - $ref: "#/components/schemas/PublishedContent"
             - type: "null"
+        updatedAt:
+          type: string
+          format: date-time
     LearningNoteListResponse:
       type: object
       additionalProperties: false
@@ -1720,6 +1724,7 @@ components:
         - slug
         - snippet
         - rank
+        - updatedAt
       properties:
         id:
           type: string
@@ -1736,6 +1741,9 @@ components:
         rank:
           type: number
           format: double
+        updatedAt:
+          type: string
+          format: date-time
     SearchResultListResponse:
       type: object
       additionalProperties: false

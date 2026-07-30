@@ -540,7 +540,8 @@ const noteSelect = `
 		published_title,
 		published_slug,
 		published_markdown,
-		published_at
+		published_at,
+		updated_at
 	FROM learning_notes
 `
 
@@ -568,6 +569,7 @@ const trashedNoteSelect = `
 		published_slug,
 		published_markdown,
 		published_at,
+		updated_at,
 		trashed_at
 	FROM learning_notes
 `
@@ -620,6 +622,7 @@ func scanTrashEntry(row rowScanner) (TrashEntry, error) {
 	var publishedSlug sql.NullString
 	var publishedMarkdown sql.NullString
 	var publishedAt sql.NullTime
+	var updatedAt time.Time
 	var trashedAt time.Time
 	if err := row.Scan(
 		&id,
@@ -633,6 +636,7 @@ func scanTrashEntry(row rowScanner) (TrashEntry, error) {
 		&publishedSlug,
 		&publishedMarkdown,
 		&publishedAt,
+		&updatedAt,
 		&trashedAt,
 	); err != nil {
 		return TrashEntry{}, err
@@ -643,6 +647,7 @@ func scanTrashEntry(row rowScanner) (TrashEntry, error) {
 	}
 	note.slug = slug
 	note.version = version
+	note.updatedAt = updatedAt
 	if publishedAt.Valid {
 		note.published = &PublishedContent{
 			Title:       publishedTitle.String,
@@ -673,6 +678,7 @@ func scanNote(row rowScanner) (*Note, error) {
 	var publishedSlug sql.NullString
 	var publishedMarkdown sql.NullString
 	var publishedAt sql.NullTime
+	var updatedAt time.Time
 	if err := row.Scan(
 		&id,
 		&spaceID,
@@ -685,6 +691,7 @@ func scanNote(row rowScanner) (*Note, error) {
 		&publishedSlug,
 		&publishedMarkdown,
 		&publishedAt,
+		&updatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -694,6 +701,7 @@ func scanNote(row rowScanner) (*Note, error) {
 	}
 	note.slug = slug
 	note.version = version
+	note.updatedAt = updatedAt
 	if publishedAt.Valid {
 		note.published = &PublishedContent{
 			Title:       publishedTitle.String,

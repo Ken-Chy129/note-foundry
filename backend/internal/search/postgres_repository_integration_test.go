@@ -68,6 +68,9 @@ func TestPostgresSearchFindsEnglishAndChineseWithoutExposingDraftsOrPrivateNotes
 	if err != nil || ownerChinese.TotalItems != 1 {
 		t.Fatalf("owner Chinese search = %+v, %v", ownerChinese, err)
 	}
+	if ownerChinese.Results[0].UpdatedAt.IsZero() {
+		t.Error("owner search result did not include the persisted update time")
+	}
 	publicDraft, err := service.SearchPublic(ctx, Options{Query: "上下文", Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatalf("public draft search error = %v", err)
