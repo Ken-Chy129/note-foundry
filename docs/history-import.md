@@ -52,9 +52,25 @@ staging/
 
 整理包不是运行时数据。`asset:<key>` 只是迁移期引用，不能直接成为 canonical Markdown 中的正式附件地址。
 
-## 写入 NoteFoundry 的顺序
+## 写入 NoteFoundry
 
-当前项目已有完成导入所需的 REST 接口，但尚未提供批量导入命令。安全的应用顺序如下：
+`historyapply` 是仅在受控服务器环境中运行的批量导入命令。默认只校验整理包，不连接数据库：
+
+```bash
+go run ./cmd/historyapply -staging /path/to/staging
+```
+
+实际写入必须显式提供 `-apply`，并通过环境变量提供运行时数据库和附件目录：
+
+```bash
+DATABASE_URL=... \
+ATTACHMENTS_DIR=/var/lib/notefoundry/attachments \
+go run ./cmd/historyapply -staging /path/to/staging -apply
+```
+
+命令会在整理包内原子维护 `apply-state.json`。中断后使用相同命令可续传；它会校验整个整理包摘要，并从已经完成的 Knowledge Space、Directory、Learning Note 和 Attachment 写入中恢复，不重复创建。应在导入完成后将 `apply-state.json` 与 `manifest.json` 一起保存，作为后续补附件时的来源到 Note ID 映射。
+
+安全的应用顺序如下：
 
 1. 对当前实例执行一次真实加密备份，并验证备份产物可读。
 2. 完整校验 `manifest.json`、全部 Markdown 路径、Attachment 大小和 SHA-256；任何校验失败都应在写入前停止。
@@ -66,12 +82,12 @@ staging/
 8. 核对 Knowledge Space、Directory、Learning Note 和 Attachment 数量，抽查 Markdown 渲染，并验证中英文搜索。
 9. 导入完成后再执行一次加密备份。
 
-## 批量导入命令的安全要求
+## 批量导入命令的安全约束
 
-后续实现自动应用命令时，应满足以下条件后才能对实例写入：
+命令满足以下约束后才会对实例写入：
 
-- Owner session 从环境变量或受限文件读取，不出现在命令行参数、日志或清单中；
-- 默认只做 preflight，写入必须使用显式 `--apply`；
+- 直接在受控服务器环境中使用现有运行时配置，不新增网络管理接口，也不需要 Owner session；
+- 默认只做 preflight，写入必须使用显式 `-apply`；
 - 目标 Knowledge Space 已存在时默认拒绝，除非提供经过校验的续传状态；
 - 每完成一个对象就原子写入本地续传映射，重试不得重复创建笔记或附件；
 - 任一 Attachment 的响应校验失败时停止，不保存包含无效 `attachment:<uuid>` 的 Markdown；
