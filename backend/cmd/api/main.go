@@ -15,6 +15,7 @@ import (
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/database"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/httpapi"
 	searchmodule "github.com/Ken-Chy129/note-foundry/backend/internal/search"
+	"github.com/Ken-Chy129/note-foundry/backend/internal/sources"
 	"github.com/google/uuid"
 )
 
@@ -81,10 +82,13 @@ func main() {
 		Attachments: attachmentService,
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
+	sourcesRepository := sources.NewPostgresRepository(pool)
+	sourcesService := sources.NewService(sources.ServiceConfig{Repository: sourcesRepository, GenerateID: uuid.NewString, Now: time.Now})
+	sourcesHTTP := sources.NewHTTPHandler(sourcesService, identityHTTP.RequireOwner)
 
 	server := &http.Server{
 		Addr:              runtimeConfig.HTTPAddress,
-		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP, searchHTTP, attachmentHTTP), runtimeConfig.SecureCookies),
+		Handler:           httpapi.SecurityHeaders(newHandler(pool, identityHTTP, knowledgeHTTP, notesHTTP, searchHTTP, attachmentHTTP, sourcesHTTP), runtimeConfig.SecureCookies),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

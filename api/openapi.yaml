@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: NoteFoundry API
-  version: 0.1.0
-  description: REST interface for the single-owner NoteFoundry learning workspace.
+  version: 0.2.0
+  description: REST interface for the single-owner NoteFoundry learning workspace and private Learning Sources.
 servers:
   - url: /
 paths:
@@ -499,6 +499,82 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LinkedNoteDataResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/sources:
+    get:
+      operationId: listLearningSources
+      summary: List private Learning Source summaries for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - name: inbox
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Paginated private Learning Source summaries. `inbox=true` restricts results to sources without a primary Knowledge Space.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSourceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createManualLearningSource
+      summary: Create a private manual Learning Source in the Source Inbox
+      security:
+        - ownerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManualLearningSourceRequest"
+      responses:
+        "201":
+          description: Manual Learning Source created and immediately ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSource"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/sources/{sourceId}:
+    get:
+      operationId: getLearningSource
+      summary: Get complete private Learning Source content for the owner
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "200":
+          description: Complete private Learning Source.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSource"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "404":
@@ -1291,6 +1367,13 @@ components:
       schema:
         type: string
         format: uuid
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     RevisionId:
       name: revisionId
       in: path
@@ -1679,6 +1762,124 @@ components:
         updatedAt:
           type: string
           format: date-time
+    LearningSourceKind:
+      type: string
+      enum:
+        - manual
+        - url
+        - pdf
+    LearningSourceProcessingStatus:
+      type: string
+      enum:
+        - pending
+        - processing
+        - ready
+        - failed
+    CreateManualLearningSourceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - title
+      properties:
+        kind:
+          type: string
+          const: manual
+        title:
+          type: string
+          minLength: 1
+        captureNote:
+          type: string
+        content:
+          type: string
+    LearningSourceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - spaceId
+        - title
+        - captureNote
+        - processingStatus
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/LearningSourceKind"
+        spaceId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        captureNote:
+          type: string
+        processingStatus:
+          $ref: "#/components/schemas/LearningSourceProcessingStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LearningSource:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - spaceId
+        - title
+        - captureNote
+        - content
+        - processingStatus
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/LearningSourceKind"
+        spaceId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        captureNote:
+          type: string
+        content:
+          type: string
+        processingStatus:
+          $ref: "#/components/schemas/LearningSourceProcessingStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LearningSourceListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LearningSourceSummary"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
     PublishedLearningNote:
       type: object
       additionalProperties: false
