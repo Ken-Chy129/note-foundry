@@ -3,7 +3,7 @@
 
 	header {
 		-Server
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://avatars.githubusercontent.com; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://avatars.githubusercontent.com https://ask.qcloudimg.com https://assets.leetcode-cn.com https://cdn.ken-chy129.cn https://gitee.com https://guide-blog-images.oss-cn-shenzhen.aliyuncs.com https://img-blog.csdn.net https://img-blog.csdnimg.cn https://img1.tbcdn.cn https://imgconvert.csdnimg.cn https://kdi72slpqf.feishu.cn https://mmbiz.qpic.cn https://my-blog-to-use.oss-cn-beijing.aliyuncs.com https://oss.javaguide.cn https://p1-juejin.byteimg.com https://p3-juejin.byteimg.com https://p6-juejin.byteimg.com https://pic1.zhimg.com https://pic2.zhimg.com https://pic3.zhimg.com https://pic4.zhimg.com https://picx.zhimg.com https://seazean.oss-cn-beijing.aliyuncs.com; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
 		X-Frame-Options DENY
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin

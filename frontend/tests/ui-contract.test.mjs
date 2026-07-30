@@ -6,10 +6,36 @@ function source(path) {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("CSP permits only the GitHub avatar host in addition to local images", () => {
+test("CSP permits the curated remote image hosts used by imported notes", () => {
   const caddyfile = source("../deploy/Caddyfile");
 
-  assert.match(caddyfile, /img-src 'self' data: https:\/\/avatars\.githubusercontent\.com;/);
+  for (const host of [
+    "ask.qcloudimg.com",
+    "assets.leetcode-cn.com",
+    "cdn.ken-chy129.cn",
+    "gitee.com",
+    "guide-blog-images.oss-cn-shenzhen.aliyuncs.com",
+    "img-blog.csdn.net",
+    "img-blog.csdnimg.cn",
+    "img1.tbcdn.cn",
+    "imgconvert.csdnimg.cn",
+    "kdi72slpqf.feishu.cn",
+    "mmbiz.qpic.cn",
+    "my-blog-to-use.oss-cn-beijing.aliyuncs.com",
+    "oss.javaguide.cn",
+    "p1-juejin.byteimg.com",
+    "p3-juejin.byteimg.com",
+    "p6-juejin.byteimg.com",
+    "pic1.zhimg.com",
+    "pic2.zhimg.com",
+    "pic3.zhimg.com",
+    "pic4.zhimg.com",
+    "picx.zhimg.com",
+    "seazean.oss-cn-beijing.aliyuncs.com"
+  ]) {
+    assert.ok(caddyfile.includes(`https://${host}`), `missing CSP image host ${host}`);
+  }
+  assert.ok(caddyfile.includes("https://avatars.githubusercontent.com"));
   assert.doesNotMatch(caddyfile, /img-src[^;]*\shttps:;/);
 });
 
