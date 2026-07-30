@@ -18,9 +18,11 @@ type OwnerMiddleware func(http.Handler) http.Handler
 
 type sourceService interface {
 	CreateManualSource(context.Context, CreateManualSourceInput) (*Source, error)
+	CreateURLSource(context.Context, CreateURLSourceInput) (CreateURLSourceResult, error)
 	GetSource(context.Context, string) (*Source, error)
 	ListSources(context.Context, ListFilter) (SourcePage, error)
 	OrganizeSource(context.Context, string, string) (*Source, error)
+	RetryURLExtraction(context.Context, string) (*Source, error)
 }
 
 type HTTPHandler struct {
@@ -35,7 +37,10 @@ type sourceResponse struct {
 	Title            string           `json:"title"`
 	CaptureNote      string           `json:"captureNote"`
 	Content          string           `json:"content"`
+	OriginalURL      *string          `json:"originalUrl"`
+	NormalizedURL    *string          `json:"normalizedUrl"`
 	ProcessingStatus ProcessingStatus `json:"processingStatus"`
+	FailureMessage   *string          `json:"failureMessage"`
 	CreatedAt        string           `json:"createdAt"`
 	UpdatedAt        string           `json:"updatedAt"`
 }
@@ -46,6 +51,7 @@ type sourceSummaryResponse struct {
 	SpaceID          *string          `json:"spaceId"`
 	Title            string           `json:"title"`
 	CaptureNote      string           `json:"captureNote"`
+	OriginalURL      *string          `json:"originalUrl"`
 	ProcessingStatus ProcessingStatus `json:"processingStatus"`
 	CreatedAt        string           `json:"createdAt"`
 	UpdatedAt        string           `json:"updatedAt"`
@@ -60,6 +66,15 @@ func (handler *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/sources", handler.requireOwner(http.HandlerFunc(handler.createSource)))
 	mux.Handle("GET /api/v1/sources/{sourceId}", handler.requireOwner(http.HandlerFunc(handler.getSource)))
 	mux.Handle("PATCH /api/v1/sources/{sourceId}", handler.requireOwner(http.HandlerFunc(handler.organizeSource)))
+	mux.Handle("POST /api/v1/sources/{sourceId}/retry-extraction", handler.requireOwner(http.HandlerFunc(handler.retryURLExtraction)))
+}
+
+func (handler *HTTPHandler) retryURLExtraction(response http.ResponseWriter, request *http.Request) {
+	source, err := handler.service.RetryURLExtraction(request.Context(), request.PathValue("sourceId"))
+	if writeSourceServiceError(response, err, "retry extraction for") {
+		return
+	}
+	_ = httpapi.WriteJSON(response, http.StatusOK, toSourceResponse(source))
 }
 
 func (handler *HTTPHandler) createSource(response http.ResponseWriter, request *http.Request) {
@@ -68,13 +83,31 @@ func (handler *HTTPHandler) createSource(response http.ResponseWriter, request *
 		Title       string `json:"title"`
 		CaptureNote string `json:"captureNote"`
 		Content     string `json:"content"`
+		OriginalURL string `json:"originalUrl"`
 	}
 	if err := httpapi.DecodeJSON(request.Body, maxSourceRequestBytes, &input); err != nil {
 		writeSourceDecodeError(response, err)
 		return
 	}
+	if input.Kind == KindURL {
+		result, err := handler.service.CreateURLSource(request.Context(), CreateURLSourceInput{
+			Title:       input.Title,
+			CaptureNote: input.CaptureNote,
+			OriginalURL: input.OriginalURL,
+		})
+		if writeSourceServiceError(response, err, "create") {
+			return
+		}
+		response.Header().Set("Location", "/api/v1/sources/"+result.Source.ID())
+		status := http.StatusOK
+		if result.Created {
+			status = http.StatusCreated
+		}
+		_ = httpapi.WriteJSON(response, status, toSourceResponse(result.Source))
+		return
+	}
 	if input.Kind != KindManual {
-		httpapi.WriteError(response, http.StatusUnprocessableEntity, "SOURCE_KIND_NOT_SUPPORTED", "only manual Learning Sources are supported in this release slice")
+		httpapi.WriteError(response, http.StatusUnprocessableEntity, "SOURCE_KIND_NOT_SUPPORTED", "only manual and URL Learning Sources are supported in this release slice")
 		return
 	}
 	source, err := handler.service.CreateManualSource(request.Context(), CreateManualSourceInput{
@@ -161,7 +194,10 @@ func toSourceResponse(source *Source) sourceResponse {
 		Title:            source.Title(),
 		CaptureNote:      source.CaptureNote(),
 		Content:          source.Content(),
+		OriginalURL:      nullableSourceString(source.OriginalURL()),
+		NormalizedURL:    nullableSourceString(source.NormalizedURL()),
 		ProcessingStatus: source.ProcessingStatus(),
+		FailureMessage:   nullableSourceString(source.FailureMessage()),
 		CreatedAt:        source.CreatedAt().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
 		UpdatedAt:        source.UpdatedAt().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
 	}
@@ -174,6 +210,7 @@ func toSourceSummaryResponse(source SourceSummary) sourceSummaryResponse {
 		SpaceID:          nullableSpaceID(source.SpaceID),
 		Title:            source.Title,
 		CaptureNote:      source.CaptureNote,
+		OriginalURL:      nullableSourceString(source.OriginalURL),
 		ProcessingStatus: source.ProcessingStatus,
 		CreatedAt:        source.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
 		UpdatedAt:        source.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00"),
@@ -181,6 +218,13 @@ func toSourceSummaryResponse(source SourceSummary) sourceSummaryResponse {
 }
 
 func nullableSpaceID(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func nullableSourceString(value string) *string {
 	if value == "" {
 		return nil
 	}
@@ -237,7 +281,7 @@ func writeSourceServiceError(response http.ResponseWriter, err error, operation 
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrSourceIDRequired) || errors.Is(err, ErrSourceTitleRequired) {
+	if errors.Is(err, ErrSourceIDRequired) || errors.Is(err, ErrSourceTitleRequired) || errors.Is(err, ErrSourceURLInvalid) {
 		httpapi.WriteError(response, http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error())
 		return true
 	}
@@ -247,6 +291,10 @@ func writeSourceServiceError(response http.ResponseWriter, err error, operation 
 	}
 	if errors.Is(err, ErrSourceSpaceNotFound) {
 		httpapi.WriteError(response, http.StatusNotFound, "SPACE_NOT_FOUND", "Knowledge Space not found")
+		return true
+	}
+	if errors.Is(err, ErrSourceExtractionUnsupported) || errors.Is(err, ErrSourceExtractionNotFailed) {
+		httpapi.WriteError(response, http.StatusConflict, "SOURCE_EXTRACTION_NOT_RETRYABLE", err.Error())
 		return true
 	}
 	httpapi.WriteError(response, http.StatusInternalServerError, "INTERNAL_ERROR", "could not "+operation+" Learning Source")

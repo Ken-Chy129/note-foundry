@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -87,5 +88,32 @@ func TestPostgresRepositoryPersistsManualSourceInbox(t *testing.T) {
 	}
 	if inboxPage.TotalItems != 0 || len(inboxPage.Sources) != 0 {
 		t.Fatalf("Source Inbox after organize = %+v", inboxPage)
+	}
+
+	urlSource, _ := NewURLSource(
+		"33333333-3333-4333-8333-333333333333",
+		"PostgreSQL documentation",
+		"Read planner notes",
+		"https://www.postgresql.org/docs/current/using-explain.html#EXAMPLE",
+		"https://www.postgresql.org/docs/current/using-explain.html",
+		createdAt,
+	)
+	if err := repository.CreateSource(ctx, urlSource); err != nil {
+		t.Fatalf("CreateSource(URL) error = %v", err)
+	}
+	foundURL, err := repository.FindSourceByNormalizedURL(ctx, urlSource.NormalizedURL())
+	if err != nil || foundURL.ID() != urlSource.ID() || foundURL.OriginalURL() != urlSource.OriginalURL() {
+		t.Fatalf("FindSourceByNormalizedURL() = %+v, %v", foundURL, err)
+	}
+	duplicateURL, _ := NewURLSource(
+		"44444444-4444-4444-8444-444444444444",
+		"Duplicate",
+		"",
+		urlSource.NormalizedURL(),
+		urlSource.NormalizedURL(),
+		createdAt,
+	)
+	if err := repository.CreateSource(ctx, duplicateURL); !errors.Is(err, ErrSourceURLConflict) {
+		t.Fatalf("duplicate URL error = %v, want %v", err, ErrSourceURLConflict)
 	}
 }

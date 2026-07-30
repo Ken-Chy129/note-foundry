@@ -93,11 +93,62 @@ func TestHTTPHandlerRejectsUnsupportedSourceKinds(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"url","title":"Example"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"pdf","title":"Example"}`))
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "SOURCE_KIND_NOT_SUPPORTED") {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestHTTPHandlerCapturesAndReusesURLSources(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	source, _ := NewURLSource(
+		"11111111-1111-4111-8111-111111111111",
+		"example.com",
+		"Read later",
+		"https://example.com/docs#top",
+		"https://example.com/docs",
+		now,
+	)
+	service := &sourceServiceStub{urlResult: CreateURLSourceResult{Source: source, Created: true}}
+	handler := NewHTTPHandler(service, allowSourceRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"url","originalUrl":"https://example.com/docs#top","captureNote":"Read later"}`))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"processingStatus":"pending"`) || !strings.Contains(response.Body.String(), `"normalizedUrl":"https://example.com/docs"`) {
+		t.Fatalf("create URL response = %d %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"failureMessage":null`) {
+		t.Fatalf("URL response did not expose nullable failure state: %s", response.Body.String())
+	}
+	if service.urlInput.OriginalURL != "https://example.com/docs#top" {
+		t.Fatalf("URL input = %+v", service.urlInput)
+	}
+
+	service.urlResult.Created = false
+	reusedResponse := httptest.NewRecorder()
+	mux.ServeHTTP(reusedResponse, httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"url","originalUrl":"https://example.com/docs"}`)))
+	if reusedResponse.Code != http.StatusOK {
+		t.Fatalf("reused URL response = %d %s", reusedResponse.Code, reusedResponse.Body.String())
+	}
+}
+
+func TestHTTPHandlerRetriesFailedURLExtraction(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	source, _ := NewURLSource("11111111-1111-4111-8111-111111111111", "example.com", "", "https://example.com/", "https://example.com/", now)
+	service := &sourceServiceStub{found: source}
+	handler := NewHTTPHandler(service, allowSourceRequest)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/sources/11111111-1111-4111-8111-111111111111/retry-extraction", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"processingStatus":"pending"`) {
+		t.Fatalf("retry response = %d %s", response.Code, response.Body.String())
 	}
 }
 
@@ -116,6 +167,7 @@ func TestHTTPHandlerProtectsEverySourceRoute(t *testing.T) {
 		httptest.NewRequest(http.MethodPost, "/api/v1/sources", strings.NewReader(`{"kind":"manual","title":"Example"}`)),
 		httptest.NewRequest(http.MethodGet, "/api/v1/sources/11111111-1111-4111-8111-111111111111", nil),
 		httptest.NewRequest(http.MethodPatch, "/api/v1/sources/11111111-1111-4111-8111-111111111111", strings.NewReader(`{"spaceId":null}`)),
+		httptest.NewRequest(http.MethodPost, "/api/v1/sources/11111111-1111-4111-8111-111111111111/retry-extraction", nil),
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, request)
@@ -138,11 +190,22 @@ type sourceServiceStub struct {
 	createInput     CreateManualSourceInput
 	listFilter      ListFilter
 	organizeSpaceID string
+	urlInput        CreateURLSourceInput
+	urlResult       CreateURLSourceResult
+}
+
+func (service *sourceServiceStub) RetryURLExtraction(context.Context, string) (*Source, error) {
+	return service.found, nil
 }
 
 func (service *sourceServiceStub) CreateManualSource(_ context.Context, input CreateManualSourceInput) (*Source, error) {
 	service.createInput = input
 	return service.created, nil
+}
+
+func (service *sourceServiceStub) CreateURLSource(_ context.Context, input CreateURLSourceInput) (CreateURLSourceResult, error) {
+	service.urlInput = input
+	return service.urlResult, nil
 }
 
 func (service *sourceServiceStub) GetSource(context.Context, string) (*Source, error) {

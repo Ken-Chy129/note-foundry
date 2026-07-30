@@ -10,6 +10,7 @@ import (
 
 	"github.com/Ken-Chy129/note-foundry/backend/internal/attachments"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/identity"
+	"github.com/Ken-Chy129/note-foundry/backend/internal/jobs"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/knowledge"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/notes"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/config"
@@ -84,10 +85,13 @@ func main() {
 	})
 	notesHTTP := notes.NewHTTPHandler(notesService, identityHTTP.RequireOwner)
 	sourcesRepository := sources.NewPostgresRepository(pool)
+	jobRepository := jobs.NewPostgresRepository(pool)
+	urlExtractionScheduler := sources.NewURLExtractionScheduler(jobRepository, uuid.NewString, time.Now)
 	sourcesService := sources.NewService(sources.ServiceConfig{
-		Repository: sourcesRepository,
-		GenerateID: uuid.NewString,
-		Now:        time.Now,
+		Repository:    sourcesRepository,
+		GenerateID:    uuid.NewString,
+		Now:           time.Now,
+		URLExtraction: urlExtractionScheduler,
 		SpaceExists: func(ctx context.Context, spaceID string) (bool, error) {
 			_, err := knowledgeRepository.GetSpace(ctx, spaceID)
 			if errors.Is(err, knowledge.ErrSpaceNotFound) {

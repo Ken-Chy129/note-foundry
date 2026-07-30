@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,14 +26,28 @@ func (repository *PostgresRepository) CreateSource(ctx context.Context, source *
 	_, err := repository.pool.Exec(ctx, `
 		INSERT INTO learning_sources (
 			id, kind, space_id, title, capture_note, current_content,
-			processing_status, created_at, updated_at
+			original_url, normalized_url, processing_status, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, source.ID(), source.Kind(), spaceID, source.Title(), source.CaptureNote(), source.Content(), source.ProcessingStatus(), source.CreatedAt(), source.UpdatedAt())
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11)
+	`, source.ID(), source.Kind(), spaceID, source.Title(), source.CaptureNote(), source.Content(), source.OriginalURL(), source.NormalizedURL(), source.ProcessingStatus(), source.CreatedAt(), source.UpdatedAt())
+	if isSourceURLConflict(err) {
+		return ErrSourceURLConflict
+	}
 	if err != nil {
 		return fmt.Errorf("insert Learning Source: %w", err)
 	}
 	return nil
+}
+
+func (repository *PostgresRepository) FindSourceByNormalizedURL(ctx context.Context, normalizedURL string) (*Source, error) {
+	source, err := scanSource(repository.pool.QueryRow(ctx, sourceSelect+` WHERE normalized_url = $1 AND trashed_at IS NULL`, normalizedURL))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrSourceNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query Learning Source by normalized URL: %w", err)
+	}
+	return source, nil
 }
 
 func (repository *PostgresRepository) GetSource(ctx context.Context, id string) (*Source, error) {
@@ -67,6 +82,27 @@ func (repository *PostgresRepository) UpdateSourceOrganization(ctx context.Conte
 	return nil
 }
 
+func (repository *PostgresRepository) UpdateSourceExtraction(ctx context.Context, source *Source) error {
+	command, err := repository.pool.Exec(ctx, `
+		UPDATE learning_sources
+		SET title = $2,
+			current_content = $3,
+			processing_status = $4,
+			failure_message = NULLIF($5, ''),
+			updated_at = $6
+		WHERE id = $1
+			AND kind = 'url'
+			AND trashed_at IS NULL
+	`, source.ID(), source.Title(), source.Content(), source.ProcessingStatus(), source.FailureMessage(), source.UpdatedAt())
+	if err != nil {
+		return fmt.Errorf("update Learning Source extraction: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return ErrSourceNotFound
+	}
+	return nil
+}
+
 func (repository *PostgresRepository) ListSources(ctx context.Context, filter ListFilter) (SourcePage, error) {
 	var spaceID any
 	if filter.SpaceID != "" {
@@ -88,6 +124,7 @@ func (repository *PostgresRepository) ListSources(ctx context.Context, filter Li
 			COALESCE(space_id::text, ''),
 			title,
 			capture_note,
+			COALESCE(original_url, ''),
 			processing_status,
 			created_at,
 			updated_at
@@ -111,6 +148,7 @@ func (repository *PostgresRepository) ListSources(ctx context.Context, filter Li
 			&source.SpaceID,
 			&source.Title,
 			&source.CaptureNote,
+			&source.OriginalURL,
 			&source.ProcessingStatus,
 			&source.CreatedAt,
 			&source.UpdatedAt,
@@ -132,7 +170,10 @@ const sourceSelect = `
 		title,
 		capture_note,
 		current_content,
+		COALESCE(original_url, ''),
+		COALESCE(normalized_url, ''),
 		processing_status,
+		COALESCE(failure_message, ''),
 		created_at,
 		updated_at
 	FROM learning_sources
@@ -151,11 +192,19 @@ func scanSource(row rowScanner) (*Source, error) {
 		&source.title,
 		&source.captureNote,
 		&source.content,
+		&source.originalURL,
+		&source.normalizedURL,
 		&source.processingStatus,
+		&source.failureMessage,
 		&source.createdAt,
 		&source.updatedAt,
 	); err != nil {
 		return nil, err
 	}
 	return &source, nil
+}
+
+func isSourceURLConflict(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "learning_sources_normalized_url_key"
 }

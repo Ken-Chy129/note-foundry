@@ -534,8 +534,8 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
     post:
-      operationId: createManualLearningSource
-      summary: Create a private manual Learning Source in the Source Inbox
+      operationId: createLearningSource
+      summary: Create or reuse a private Learning Source in the Source Inbox
       security:
         - ownerSession: []
       requestBody:
@@ -543,10 +543,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateManualLearningSourceRequest"
+              oneOf:
+                - $ref: "#/components/schemas/CreateManualLearningSourceRequest"
+                - $ref: "#/components/schemas/CreateURLLearningSourceRequest"
       responses:
+        "200":
+          description: An existing URL Learning Source with the same normalized URL was reused.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSource"
         "201":
-          description: Manual Learning Source created and immediately ready.
+          description: Learning Source created. Manual sources are ready immediately; URL sources are queued for extraction.
           content:
             application/json:
               schema:
@@ -612,6 +620,29 @@ paths:
           $ref: "#/components/responses/RequestTooLarge"
         "422":
           $ref: "#/components/responses/InvalidRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/sources/{sourceId}/retry-extraction:
+    post:
+      operationId: retryLearningSourceExtraction
+      summary: Retry extraction for a failed URL Learning Source
+      security:
+        - ownerSession: []
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "200":
+          description: A new extraction Job was queued and the Learning Source returned to pending status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningSource"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/notes:
@@ -1825,6 +1856,25 @@ components:
           type: string
         content:
           type: string
+    CreateURLLearningSourceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - originalUrl
+      properties:
+        kind:
+          type: string
+          const: url
+        originalUrl:
+          type: string
+          format: uri
+          description: Absolute HTTP or HTTPS URL without credentials.
+        title:
+          type: string
+          description: Optional display title; the URL hostname is used until extraction supplies a page title.
+        captureNote:
+          type: string
     OrganizeLearningSourceRequest:
       type: object
       additionalProperties: false
@@ -1846,6 +1896,7 @@ components:
         - spaceId
         - title
         - captureNote
+        - originalUrl
         - processingStatus
         - createdAt
         - updatedAt
@@ -1865,6 +1916,11 @@ components:
           minLength: 1
         captureNote:
           type: string
+        originalUrl:
+          type:
+            - string
+            - "null"
+          format: uri
         processingStatus:
           $ref: "#/components/schemas/LearningSourceProcessingStatus"
         createdAt:
@@ -1883,7 +1939,10 @@ components:
         - title
         - captureNote
         - content
+        - originalUrl
+        - normalizedUrl
         - processingStatus
+        - failureMessage
         - createdAt
         - updatedAt
       properties:
@@ -1904,8 +1963,22 @@ components:
           type: string
         content:
           type: string
+        originalUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+        normalizedUrl:
+          type:
+            - string
+            - "null"
+          format: uri
         processingStatus:
           $ref: "#/components/schemas/LearningSourceProcessingStatus"
+        failureMessage:
+          type:
+            - string
+            - "null"
         createdAt:
           type: string
           format: date-time

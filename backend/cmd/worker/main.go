@@ -15,6 +15,7 @@ import (
 	"github.com/Ken-Chy129/note-foundry/backend/internal/jobs"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/config"
 	"github.com/Ken-Chy129/note-foundry/backend/internal/platform/database"
+	"github.com/Ken-Chy129/note-foundry/backend/internal/sources"
 	"github.com/google/uuid"
 )
 
@@ -39,6 +40,9 @@ func main() {
 	}
 	jobRepository := jobs.NewPostgresRepository(pool)
 	handlers := make(map[string]jobs.Handler)
+	sourceRepository := sources.NewPostgresRepository(pool)
+	urlExtractionHandler := sources.NewURLExtractionHandler(sourceRepository, sources.NewHTTPURLExtractor(), time.Now)
+	handlers[sources.JobKindExtractURL] = urlExtractionHandler.Handle
 	var backupScheduler *backup.Scheduler
 	if runtimeConfig.BackupEnabled {
 		store, err := backup.NewMinioStore(backup.MinioStoreConfig{

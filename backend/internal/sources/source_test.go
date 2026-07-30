@@ -2,6 +2,7 @@ package sources
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,5 +60,74 @@ func TestSourceOrganizeKeepsStableIdentityAndCanReturnToInbox(t *testing.T) {
 	source.Organize("", returnedAt)
 	if source.SpaceID() != "" || !source.UpdatedAt().Equal(returnedAt) {
 		t.Fatalf("returned source = space:%q updatedAt:%v", source.SpaceID(), source.UpdatedAt())
+	}
+}
+
+func TestNewURLSourceStartsPendingWithNormalizedIdentity(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	source, err := NewURLSource(
+		"11111111-1111-4111-8111-111111111111",
+		"PostgreSQL documentation",
+		"Read planner notes",
+		"https://www.postgresql.org/docs/current/using-explain.html#EXAMPLE",
+		"https://www.postgresql.org/docs/current/using-explain.html",
+		now,
+	)
+	if err != nil {
+		t.Fatalf("NewURLSource() error = %v", err)
+	}
+	if source.Kind() != KindURL || source.ProcessingStatus() != ProcessingStatusPending || source.Content() != "" {
+		t.Fatalf("URL source kind/status/content = %q / %q / %q", source.Kind(), source.ProcessingStatus(), source.Content())
+	}
+	if source.OriginalURL() != "https://www.postgresql.org/docs/current/using-explain.html#EXAMPLE" || source.NormalizedURL() != "https://www.postgresql.org/docs/current/using-explain.html" {
+		t.Fatalf("URL source addresses = %q / %q", source.OriginalURL(), source.NormalizedURL())
+	}
+}
+
+func TestNormalizeSourceURLProducesStableHTTPIdentity(t *testing.T) {
+	normalized, err := NormalizeSourceURL(" HTTPS://Example.COM:443/path?b=2&a=3&a=1#fragment ")
+	if err != nil {
+		t.Fatalf("NormalizeSourceURL() error = %v", err)
+	}
+	if normalized != "https://example.com/path?a=1&a=3&b=2" {
+		t.Fatalf("normalized URL = %q", normalized)
+	}
+
+	for _, raw := range []string{"ftp://example.com/file", "https://user:secret@example.com/", "https:///missing-host"} {
+		if _, err := NormalizeSourceURL(raw); !errors.Is(err, ErrSourceURLInvalid) {
+			t.Errorf("NormalizeSourceURL(%q) error = %v, want %v", raw, err, ErrSourceURLInvalid)
+		}
+	}
+}
+
+func TestURLSourceTracksExtractionLifecycle(t *testing.T) {
+	createdAt := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	source, _ := NewURLSource("11111111-1111-4111-8111-111111111111", "example.com", "", "https://example.com/", "https://example.com/", createdAt)
+
+	processingAt := createdAt.Add(time.Minute)
+	if err := source.MarkExtractionProcessing(processingAt); err != nil {
+		t.Fatalf("MarkExtractionProcessing() error = %v", err)
+	}
+	if source.ProcessingStatus() != ProcessingStatusProcessing || !source.UpdatedAt().Equal(processingAt) {
+		t.Fatalf("processing source = status:%q updatedAt:%v", source.ProcessingStatus(), source.UpdatedAt())
+	}
+
+	failedAt := processingAt.Add(time.Minute)
+	if err := source.RetryExtraction("temporary timeout", failedAt); err != nil {
+		t.Fatalf("RetryExtraction() error = %v", err)
+	}
+	if source.ProcessingStatus() != ProcessingStatusPending || source.FailureMessage() != "temporary timeout" {
+		t.Fatalf("retrying source = status:%q failure:%q", source.ProcessingStatus(), source.FailureMessage())
+	}
+
+	readyAt := failedAt.Add(time.Minute)
+	if err := source.CompleteExtraction(" Extracted title ", "Extracted body", readyAt); err != nil {
+		t.Fatalf("CompleteExtraction() error = %v", err)
+	}
+	if source.ProcessingStatus() != ProcessingStatusReady || source.Title() != "Extracted title" || source.Content() != "Extracted body" || source.FailureMessage() != "" {
+		t.Fatalf("ready source = title:%q status:%q content:%q failure:%q", source.Title(), source.ProcessingStatus(), source.Content(), source.FailureMessage())
+	}
+	if err := source.CompleteExtraction(strings.Repeat("长", 241), "Extracted body", readyAt); err != nil || len([]rune(source.Title())) != 240 {
+		t.Fatalf("long extracted title = length:%d error:%v", len([]rune(source.Title())), err)
 	}
 }
