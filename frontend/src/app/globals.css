@@ -244,14 +244,26 @@ button, a, input, textarea, select { outline-offset: 3px; }
 .note-navigation::-webkit-scrollbar { width: 8px; }
 .note-navigation::-webkit-scrollbar-thumb { border: 2px solid #18211d; border-radius: 999px; background: #5f7469; }
 .note-navigation::-webkit-scrollbar-track { background: transparent; }
-.note-navigation > button { width: 100%; display: grid; grid-template-columns: 18px 1fr 8px; align-items: center; gap: .45rem; padding: .58rem .62rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #b8c4be; text-align: left; cursor: pointer; }
-.note-navigation > button:hover { background: rgb(255 255 255 / 5%); color: #fff; }
-.note-navigation > button.is-active { background: var(--forge); color: #fff; }
-.note-navigation > button span { min-width: 0; }
-.note-navigation strong, .note-navigation small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note-navigation strong { font-size: .78rem; font-weight: 580; }
-.note-navigation small { margin-top: .12rem; color: currentColor; opacity: .58; font-size: .64rem; }
-.note-navigation i { width: 6px; height: 6px; border-radius: 50%; background: #83d1af; }
+.directory-tree { padding-top: .12rem; }
+.directory-tree-root-group, .directory-tree-branch { min-width: 0; }
+.directory-tree-root-group + .directory-tree-branch { margin-top: .18rem; }
+.directory-tree-root-label { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: .38rem; padding: .43rem .52rem; color: #82948b; }
+.directory-tree-root-label span, .directory-tree-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.directory-tree-root-label span { font-size: .65rem; font-weight: 700; letter-spacing: .04em; }
+.directory-tree-root-label small, .directory-tree-row small { color: currentColor; opacity: .58; font-family: var(--font-mono); font-size: .58rem; font-variant-numeric: tabular-nums; }
+.directory-tree-row { width: 100%; min-width: 0; display: grid; grid-template-columns: 14px 16px minmax(0, 1fr) auto; align-items: center; gap: .32rem; padding: .42rem .48rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #a7b6af; text-align: left; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.directory-tree-row:hover { background: rgb(255 255 255 / 6%); color: #fff; }
+.directory-tree-row.is-selected-path { color: #dce7e1; }
+.directory-tree-row > svg:first-child { opacity: .58; transition: transform .16s ease; }
+.directory-tree-row > svg:first-child.is-expanded { transform: rotate(90deg); }
+.directory-tree-row span { font-size: .72rem; font-weight: 650; }
+.directory-tree-children { margin-left: .52rem; padding-left: .28rem; border-left: 1px solid rgb(255 255 255 / 10%); }
+.directory-tree-children.is-root { margin-left: .5rem; }
+.directory-tree-note { width: 100%; min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) 7px; align-items: center; gap: .36rem; padding: .45rem .48rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: #aebdb6; text-align: left; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.directory-tree-note:hover { background: rgb(255 255 255 / 5%); color: #fff; }
+.directory-tree-note.is-active { background: var(--forge); color: #fff; }
+.directory-tree-note strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; font-weight: 570; }
+.directory-tree-note i { width: 6px; height: 6px; border-radius: 50%; background: #83d1af; }
 .sidebar-empty { padding: .75rem; color: #7f9087; font-size: .72rem; }
 .trash-link { display: flex; align-items: center; gap: .55rem; margin: .5rem; padding: .7rem; border: 0; border-top: 1px solid rgb(255 255 255 / 9%); background: transparent; color: #9eaca5; font-size: .75rem; cursor: pointer; }
 .trash-link:hover { color: #fff; }

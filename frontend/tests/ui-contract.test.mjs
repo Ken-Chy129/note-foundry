@@ -133,3 +133,20 @@ test("workspace search opens from the sidebar and keeps results in a bounded scr
     /\.workspace-search-results\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
   );
 });
+
+test("the workspace sidebar renders notes in an accessible nested directory tree", () => {
+  const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
+  const treePath = new URL("../src/components/workspace/WorkspaceDirectoryTree.tsx", import.meta.url);
+  const styles = source("src/app/globals.css");
+
+  assert.match(sidebar, /<WorkspaceDirectoryTree/);
+  assert.doesNotMatch(sidebar, /props\.notes\.map/);
+  assert.equal(existsSync(treePath), true);
+
+  const tree = source("src/components/workspace/WorkspaceDirectoryTree.tsx");
+  assert.match(tree, /role="tree"/);
+  assert.match(tree, /role="group"/);
+  assert.match(tree, /aria-expanded=/);
+  assert.match(tree, /directoryAncestorIds/);
+  assert.match(styles, /\.directory-tree-children\s*\{[^}]*border-left:/s);
+});
