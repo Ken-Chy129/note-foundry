@@ -82,7 +82,7 @@ test("the workspace note list owns a shrinkable vertical scroll area", () => {
   );
 });
 
-test("workspace search opens from the sidebar and keeps results in a bounded scroller", () => {
+test("workspace search opens from the sidebar, searches while typing, and shows result times", () => {
   const workspace = source("src/components/workspace/WorkspaceApp.tsx");
   const sidebar = source("src/components/workspace/KnowledgeSidebar.tsx");
   const searchDialogPath = new URL("../src/components/workspace/WorkspaceSearchDialog.tsx", import.meta.url);
@@ -96,8 +96,25 @@ test("workspace search opens from the sidebar and keeps results in a bounded scr
 
   const searchDialog = source("src/components/workspace/WorkspaceSearchDialog.tsx");
   assert.match(searchDialog, /aria-live="polite"/);
+  assert.match(searchDialog, /\/api\/v1\/notes\?pageSize=12/);
+  assert.match(searchDialog, /setTimeout\([\s\S]*250/);
+  assert.match(searchDialog, /updatedAt/);
+  assert.match(searchDialog, /workspace-search-time/);
+  assert.match(searchDialog, /今天 ·/);
+  assert.match(searchDialog, /昨天 ·/);
+  assert.match(searchDialog, /月.*日 ·/s);
   assert.match(searchDialog, /正在搜索/);
   assert.match(searchDialog, /没有找到相关笔记/);
+  assert.doesNotMatch(searchDialog, /description="按标题、正文和标签查找学习笔记"/);
+  assert.doesNotMatch(searchDialog, /最近更新/);
+  assert.doesNotMatch(searchDialog, /onSubmit=/);
+  assert.doesNotMatch(searchDialog, /CornerDownLeft/);
+  assert.doesNotMatch(searchDialog, /ArrowUpRight/);
+  assert.doesNotMatch(searchDialog, /workspace-search-submit/);
+  assert.doesNotMatch(searchDialog, /workspace-search-clear/);
+  assert.doesNotMatch(searchDialog, /workspace-search-context/);
+  assert.doesNotMatch(searchDialog, /workspace-search-footer/);
+  assert.doesNotMatch(searchDialog, /Enter.*搜索.*Esc.*关闭/s);
   assert.match(
     styles,
     /\.workspace-search-dialog\s*\{[^}]*display:\s*flex;[^}]*overflow:\s*hidden;/s
@@ -108,9 +125,12 @@ test("workspace search opens from the sidebar and keeps results in a bounded scr
   );
   assert.match(styles, /\.workspace-search-dialog\s*>\s*header\s*\{[^}]*border-bottom:\s*0;/s);
   assert.match(styles, /\.workspace-search-field\s*\{[^}]*border:\s*0;/s);
-  assert.match(styles, /\.workspace-search-context\s*\{[^}]*border-bottom:\s*0;/s);
   assert.match(styles, /\.workspace-search-result\s*\{[^}]*border:\s*0;/s);
-  assert.match(styles, /\.workspace-search-footer\s*\{[^}]*border-top:\s*0;/s);
+  assert.match(styles, /\.workspace-search-time\s*\{[^}]*font-size:/s);
+  assert.doesNotMatch(styles, /\.workspace-search-context\s*\{/);
+  assert.doesNotMatch(styles, /\.workspace-search-submit\s*\{/);
+  assert.doesNotMatch(styles, /\.workspace-search-clear\s*\{/);
+  assert.doesNotMatch(styles, /\.workspace-search-footer\s*\{/);
 });
 
 test("the workspace sidebar renders notes in an accessible nested directory tree", () => {
@@ -147,8 +167,10 @@ test("the workspace opens compactly with readable tree type and consistent NoteF
   assert.match(styles, /\.directory-tree-note strong\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*400;/s);
   assert.match(workspace, /className="workspace-space-meta"/);
   assert.match(styles, /\.workspace-space-meta\s*\{[^}]*display:\s*flex;[^}]*white-space:\s*nowrap;/s);
-  assert.match(styles, /\.workspace-space-meta strong\s*\{[^}]*font-size:\s*15px;[^}]*font-weight:\s*500;/s);
+  assert.match(styles, /\.workspace-space-meta strong\s*\{[^}]*font-size:\s*15px;[^}]*font-weight:\s*600;/s);
   assert.match(styles, /\.workspace-space-meta span\s*\{[^}]*font-size:\s*12px;/s);
+  assert.match(styles, /\.workspace-search-result strong\s*\{[^}]*font-size:\s*15px;[^}]*font-weight:\s*400;/s);
+  assert.match(styles, /\.trash-list strong\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*400;/s);
   assert.equal(existsSync(logoPath), true);
   assert.equal(existsSync(iconPath), true);
   assert.match(sidebar, /<NoteFoundryLogo/);
