@@ -1,41 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
+import { PublicSpaceDirectoryNav } from "@/components/public/PublicSpaceDirectoryNav";
+import { PublicSpaceDirectorySection, PublicSpaceNoteList } from "@/components/public/PublicSpaceDirectorySection";
+import { buildPublicSpaceIndex } from "@/components/public/publicSpaceIndex";
 import { SiteHeader } from "@/components/public/SiteHeader";
 import { publicApiFetch } from "@/lib/public-api";
 
 export const dynamic = "force-dynamic";
 import type { DataResponse, Directory, KnowledgeSpace, PageResponse, PublishedNote } from "@/lib/types";
-
-function directoryPath(directoryId: string | null, directories: Directory[]): string {
-  if (!directoryId) return "根目录";
-  const byId = new Map(directories.map((directory) => [directory.id, directory]));
-  const names: string[] = [];
-  let current = byId.get(directoryId);
-  while (current) {
-    names.unshift(current.name);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
-  return names.join(" / ") || "根目录";
-}
-
-function noteExcerpt(markdown: string): string {
-  return markdown
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[#>*_`~|=-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 150);
-}
-
-function publishedDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  }).format(new Date(value));
-}
 
 export default async function SpacePage({ params }: { params: Promise<{ spaceId: string }> }) {
   const { spaceId } = await params;
@@ -47,48 +20,69 @@ export default async function SpacePage({ params }: { params: Promise<{ spaceId:
   const space = spacesResponse?.data.find((item) => item.id === spaceId);
   if (!space || !directoriesResponse || !notesResponse) notFound();
   const directories = directoriesResponse.data;
+  const index = buildPublicSpaceIndex(directories, notesResponse.data);
+  const directoryCount = directories.length;
+  const noteCount = notesResponse.pagination.totalItems;
 
   return (
-    <main>
+    <main className="public-space-page">
       <SiteHeader />
-      <section className="space-page-header">
+      <div className="public-space-shell">
         <Link className="back-link" href="/"><ArrowLeft size={16} /> 全部知识空间</Link>
-        <div className="space-page-heading">
-          <div>
-            <p className="section-kicker">公开知识空间</p>
-            <h1>{space.name}</h1>
-          </div>
-          <p className="space-note-count">
-            <strong>{notesResponse.pagination.totalItems}</strong>
-            <span>篇公开笔记</span>
+        <header className="public-space-masthead">
+          <p className="space-location"><span>知识空间</span><i>/</i><strong>公开</strong></p>
+          <h1>{space.name}</h1>
+          <p className="space-facts">
+            <span>{noteCount} 篇笔记</span>
+            <span>{directoryCount} 个目录</span>
           </p>
-        </div>
-      </section>
-      <section className="space-note-catalog" aria-label={`${space.name}中的学习笔记`}>
-        <header>
-          <h2>文章</h2>
-          <p>按最近发布时间排序</p>
         </header>
-        {notesResponse.data.length === 0 ? (
-          <div className="empty-state"><div><h3>这里还没有公开笔记</h3><p>发布后的学习笔记会出现在这里。</p></div></div>
+
+        {noteCount === 0 ? (
+          <div className="public-space-empty">
+            <p>知识索引</p>
+            <h2>这里还没有公开笔记</h2>
+            <span>发布后的学习笔记会按目录整理在这里</span>
+          </div>
         ) : (
-          notesResponse.data.map((note) => {
-            const excerpt = noteExcerpt(note.markdown);
-            return (
-              <article className="space-note-row" key={note.id}>
-                <Link href={`/notes/${note.id}/${note.slug}`}>
-                  <p className="space-note-meta">
-                    <span>{directoryPath(note.directoryId, directories)}</span>
-                    <time dateTime={note.publishedAt}>{publishedDate(note.publishedAt)}</time>
-                  </p>
-                  <h2>{note.title}</h2>
-                  {excerpt && <p className="note-excerpt">{excerpt}</p>}
-                </Link>
-              </article>
-            );
-          })
+          <>
+            <details className="mobile-space-directory">
+              <summary>空间目录 <span>{directoryCount}</span></summary>
+              <PublicSpaceDirectoryNav directories={index.directories} rootNoteCount={index.rootNotes.length} />
+            </details>
+
+            <div className="public-space-layout">
+              <aside className="space-directory-rail">
+                <PublicSpaceDirectoryNav directories={index.directories} rootNoteCount={index.rootNotes.length} />
+              </aside>
+
+              <section className="space-directory-content" aria-label={`${space.name}中的学习笔记`}>
+                <header className="space-index-heading">
+                  <div>
+                    <p>知识索引</p>
+                    <h2>按目录浏览</h2>
+                  </div>
+                  <p>沿着主题结构查找笔记，而不是翻阅一条时间流</p>
+                </header>
+
+                {index.rootNotes.length > 0 && (
+                  <section className="space-directory-section" id="未归类" data-depth="0">
+                    <header className="space-directory-section-heading">
+                      <h3>未归类</h3>
+                      <span>{index.rootNotes.length} 篇</span>
+                    </header>
+                    <PublicSpaceNoteList notes={index.rootNotes} />
+                  </section>
+                )}
+
+                {index.directories.map((node) => (
+                  <PublicSpaceDirectorySection key={node.directory.id} node={node} />
+                ))}
+              </section>
+            </div>
+          </>
         )}
-      </section>
+      </div>
     </main>
   );
 }

@@ -68,31 +68,55 @@ test("the v0.1 interface declares Simplified Chinese and uses Chinese core copy"
   }
 });
 
-test("the public home is a compact reading index without owner or catalog decoration", () => {
+test("the public home presents a wide knowledge index with a substantial shared header", () => {
   const home = source("src/app/page.tsx");
   const publicSearch = source("src/components/public/PublicSearch.tsx");
   const siteHeader = source("src/components/public/SiteHeader.tsx");
+  const styles = source("src/app/globals.css");
 
   assert.doesNotMatch(home, /href="\/workspace"/);
   assert.doesNotMatch(siteHeader, /href="\/workspace"/);
   assert.doesNotMatch(`${home}\n${siteHeader}`, /所有者工作区/);
-  assert.match(home, /学习笔记/);
+  assert.match(home, /公开知识库/);
+  assert.match(home, /className="home-hero-intro"/);
+  assert.match(home, /className="space-shelf"/);
+  assert.match(siteHeader, /className="site-header-inner"/);
+  assert.match(siteHeader, /公开知识库/);
+  assert.match(siteHeader, /<PublicSearch/);
+  assert.doesNotMatch(home, /<PublicSearch/);
   assert.match(publicSearch, /搜索公开笔记/);
-  assert.doesNotMatch(home, /catalog-count|home-intro-copy|<dl>/);
-  assert.doesNotMatch(siteHeader, /<nav/);
+  assert.match(publicSearch, /className="public-search-trigger"/);
+  assert.match(publicSearch, /aria-label="搜索公开笔记"/);
+  assert.match(publicSearch, /role="dialog"/);
+  assert.match(publicSearch, /aria-modal="true"/);
+  assert.match(styles, /\.site-header\s*\{[^}]*background:\s*var\(--header-bg\)/s);
+  assert.match(styles, /\.space-shelf\s*\{/);
+  assert.match(styles, /\.public-search-dialog\s*\{/);
+  assert.doesNotMatch(home, /className="space-list"/);
+  assert.doesNotMatch(home, /home-hero-copy/);
+  assert.doesNotMatch(styles, /\.public-search-tool\s*\{/);
 });
 
-test("a public space prioritizes a readable article catalog over decorative numbering", () => {
+test("a public space renders a directory-led knowledge index instead of a blog feed", () => {
   const spacePage = source("src/app/spaces/[spaceId]/page.tsx");
+  const directoryNav = source("src/components/public/PublicSpaceDirectoryNav.tsx");
+  const directorySection = source("src/components/public/PublicSpaceDirectorySection.tsx");
   const styles = source("src/app/globals.css");
 
-  assert.match(spacePage, /className="space-note-catalog"/);
-  assert.match(spacePage, /publishedAt/);
-  assert.match(spacePage, /篇公开笔记/);
+  assert.match(spacePage, /buildPublicSpaceIndex/);
+  assert.match(spacePage, /className="public-space-layout"/);
+  assert.match(spacePage, /空间目录/);
+  assert.match(spacePage, /按目录浏览/);
+  assert.match(directoryNav, /<nav/);
+  assert.match(directoryNav, /totalNotes/);
+  assert.match(directorySection, /space-directory-section/);
+  assert.match(directorySection, /node\.children/);
+  assert.match(styles, /\.space-directory-rail\s*\{/);
+  assert.match(styles, /\.space-directory-section\s*\{/);
+  assert.doesNotMatch(spacePage, /space-note-catalog/);
+  assert.doesNotMatch(spacePage, /按最近发布时间排序/);
   assert.doesNotMatch(spacePage, /note-index-marker/);
   assert.doesNotMatch(spacePage, /round-link/);
-  assert.doesNotMatch(spacePage, /String\(index \+ 1\)\.padStart/);
-  assert.match(styles, /\.space-note-row\s*\{/);
 });
 
 test("the inspector copies a readable Markdown note reference without exposing the UUID", () => {

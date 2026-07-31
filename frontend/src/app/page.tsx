@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen } from "lucide-react";
-import { PublicSearch } from "@/components/public/PublicSearch";
+import { ArrowUpRight, BookOpen } from "lucide-react";
 import { SiteHeader } from "@/components/public/SiteHeader";
 import { publicApiFetch } from "@/lib/public-api";
 
@@ -12,22 +11,25 @@ export default async function HomePage() {
   const spaces = response?.data ?? [];
 
   return (
-    <main>
+    <main className="public-site">
       <SiteHeader />
       <div className="public-home">
         <section className="home-hero" aria-labelledby="home-title">
-          <div className="home-hero-copy">
-            <h1 id="home-title">学习笔记</h1>
-            <p>整理长期学习中值得留下的理解与实践。</p>
+          <div className="home-hero-intro">
+            <p className="home-hero-kicker">NoteFoundry / Public</p>
+            <h1 id="home-title">公开知识库</h1>
+            <p>按知识空间浏览长期整理的技术笔记，需要时再搜索一个具体问题。</p>
           </div>
-          <PublicSearch />
         </section>
 
         <section className="space-index" id="spaces" aria-labelledby="spaces-title">
-          <div className="section-heading">
-            <h2 id="spaces-title">知识空间</h2>
-            <p>{spaces.length} 个公开空间</p>
-          </div>
+          <header className="space-index-header">
+            <div>
+              <p>知识结构</p>
+              <h2 id="spaces-title">知识空间</h2>
+            </div>
+            <p><strong>{spaces.length}</strong> 个公开空间</p>
+          </header>
           {spaces.length === 0 ? (
             <div className="empty-state" role="status">
               <BookOpen aria-hidden="true" size={22} strokeWidth={1.7} />
@@ -37,19 +39,20 @@ export default async function HomePage() {
               </div>
             </div>
           ) : (
-            <ul className="space-list">
+            <ul className="space-shelf">
               {spaces.map((space) => (
                 <li key={space.id}>
                   <Link href={`/spaces/${space.id}`}>
-                    <span>{space.name}</span>
-                    <ArrowRight aria-hidden="true" size={19} />
+                    <span className="space-shelf-label">知识空间</span>
+                    <strong>{space.name}</strong>
+                    <span className="space-shelf-action">浏览目录 <ArrowUpRight aria-hidden="true" size={18} /></span>
                   </Link>
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <footer className="site-footer">NoteFoundry · 个人学习笔记</footer>
+        <footer className="site-footer"><span>NoteFoundry</span><span>持续整理的个人技术知识</span></footer>
       </div>
     </main>
   );
