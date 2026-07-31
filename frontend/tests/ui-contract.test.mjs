@@ -82,6 +82,30 @@ test("the public home is a compact reading index without owner or catalog decora
   assert.doesNotMatch(siteHeader, /<nav/);
 });
 
+test("a public space prioritizes a readable article catalog over decorative numbering", () => {
+  const spacePage = source("src/app/spaces/[spaceId]/page.tsx");
+  const styles = source("src/app/globals.css");
+
+  assert.match(spacePage, /className="space-note-catalog"/);
+  assert.match(spacePage, /publishedAt/);
+  assert.match(spacePage, /篇公开笔记/);
+  assert.doesNotMatch(spacePage, /note-index-marker/);
+  assert.doesNotMatch(spacePage, /round-link/);
+  assert.doesNotMatch(spacePage, /String\(index \+ 1\)\.padStart/);
+  assert.match(styles, /\.space-note-row\s*\{/);
+});
+
+test("the inspector copies a readable Markdown note reference without exposing the UUID", () => {
+  const inspector = source("src/components/workspace/InspectorPanel.tsx");
+
+  assert.match(inspector, /引用这篇笔记/);
+  assert.match(inspector, /const markdownLink =/);
+  assert.match(inspector, /navigator\.clipboard\.writeText\(markdownLink\)/);
+  assert.match(inspector, /props\.note\.title/);
+  assert.doesNotMatch(inspector, /<code>\{stableLink\}<\/code>/);
+  assert.doesNotMatch(inspector, /在 Markdown 中使用/);
+});
+
 test("the owner workspace lives only at /workspace", () => {
   const workspaceRoute = new URL("../src/app/workspace/page.tsx", import.meta.url);
   const legacyAppRoute = new URL("../src/app/app/page.tsx", import.meta.url);

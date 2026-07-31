@@ -36,6 +36,7 @@ export function InspectorPanel(props: InspectorPanelProps) {
     return <aside className="inspector-panel inspector-empty">选择学习笔记后，这里会显示详细信息。</aside>;
   }
   const stableLink = `note:${props.note.id}`;
+  const markdownLink = `[${props.note.title.replace(/([\\\[\]])/g, "\\$1")}](${stableLink})`;
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -46,11 +47,15 @@ export function InspectorPanel(props: InspectorPanelProps) {
   return (
     <aside className="inspector-panel" aria-label="学习笔记详情">
       <section className="inspector-section">
-        <h2><Link2 size={15} /> 稳定链接</h2>
-        <button className="copy-value" onClick={() => navigator.clipboard.writeText(stableLink)} title="复制稳定笔记链接">
-          <code>{stableLink}</code><Clipboard size={14} />
+        <h2><Link2 size={15} /> 引用这篇笔记</h2>
+        <button className="copy-note-link" onClick={() => navigator.clipboard.writeText(markdownLink)} title="复制 Markdown 笔记链接">
+          <span>
+            <strong>{props.note.title}</strong>
+            <small>复制为 Markdown 链接</small>
+          </span>
+          <Clipboard size={14} />
         </button>
-        <p>在 Markdown 中使用：<code>[链接文字]({stableLink})</code>。</p>
+        <p>标题或目录变化后，这个引用仍然指向同一篇笔记。</p>
       </section>
 
       <section className="inspector-section">

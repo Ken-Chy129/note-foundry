@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/public/SiteHeader";
 import { publicApiFetch } from "@/lib/public-api";
@@ -19,6 +19,24 @@ function directoryPath(directoryId: string | null, directories: Directory[]): st
   return names.join(" / ") || "根目录";
 }
 
+function noteExcerpt(markdown: string): string {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_`~|=-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 150);
+}
+
+function publishedDate(value: string): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  }).format(new Date(value));
+}
+
 export default async function SpacePage({ params }: { params: Promise<{ spaceId: string }> }) {
   const { spaceId } = await params;
   const [spacesResponse, directoriesResponse, notesResponse] = await Promise.all([
@@ -35,25 +53,40 @@ export default async function SpacePage({ params }: { params: Promise<{ spaceId:
       <SiteHeader />
       <section className="space-page-header">
         <Link className="back-link" href="/"><ArrowLeft size={16} /> 全部知识空间</Link>
-        <p className="section-kicker">公开知识空间</p>
-        <h1>{space.name}</h1>
-        <p>已发布 {notesResponse.pagination.totalItems} 篇学习笔记</p>
+        <div className="space-page-heading">
+          <div>
+            <p className="section-kicker">公开知识空间</p>
+            <h1>{space.name}</h1>
+          </div>
+          <p className="space-note-count">
+            <strong>{notesResponse.pagination.totalItems}</strong>
+            <span>篇公开笔记</span>
+          </p>
+        </div>
       </section>
-      <section className="note-index" aria-label={`${space.name}中的学习笔记`}>
+      <section className="space-note-catalog" aria-label={`${space.name}中的学习笔记`}>
+        <header>
+          <h2>文章</h2>
+          <p>按最近发布时间排序</p>
+        </header>
         {notesResponse.data.length === 0 ? (
-          <div className="empty-state"><h2>这里还没有已发布笔记</h2><p>这个知识空间已经公开，第一篇学习笔记仍在准备中。</p></div>
+          <div className="empty-state"><div><h3>这里还没有公开笔记</h3><p>发布后的学习笔记会出现在这里。</p></div></div>
         ) : (
-          notesResponse.data.map((note, index) => (
-            <article className="note-index-row" key={note.id}>
-              <span className="note-index-marker">{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <p className="directory-path">{directoryPath(note.directoryId, directories)}</p>
-                <h2><Link href={`/notes/${note.id}/${note.slug}`}>{note.title}</Link></h2>
-                <p className="note-excerpt">{note.markdown.replace(/[#*`>\[\]]/g, "").slice(0, 180)}</p>
-              </div>
-              <Link className="round-link" aria-label={`阅读《${note.title}》`} href={`/notes/${note.id}/${note.slug}`}><ArrowRight size={18} /></Link>
-            </article>
-          ))
+          notesResponse.data.map((note) => {
+            const excerpt = noteExcerpt(note.markdown);
+            return (
+              <article className="space-note-row" key={note.id}>
+                <Link href={`/notes/${note.id}/${note.slug}`}>
+                  <p className="space-note-meta">
+                    <span>{directoryPath(note.directoryId, directories)}</span>
+                    <time dateTime={note.publishedAt}>{publishedDate(note.publishedAt)}</time>
+                  </p>
+                  <h2>{note.title}</h2>
+                  {excerpt && <p className="note-excerpt">{excerpt}</p>}
+                </Link>
+              </article>
+            );
+          })
         )}
       </section>
     </main>
