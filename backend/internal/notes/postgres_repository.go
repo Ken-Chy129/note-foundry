@@ -332,6 +332,42 @@ func (repository *PostgresRepository) ListNoteSummaries(ctx context.Context, fil
 	return NoteSummaryPage{Notes: summaries, Page: filter.Page, PageSize: filter.PageSize, TotalItems: totalItems}, nil
 }
 
+func (repository *PostgresRepository) ListUnpublishedPublicNotes(ctx context.Context, limit int) ([]PublicDraftCandidate, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidBulkPublishLimit
+	}
+	rows, err := repository.pool.Query(ctx, `
+		SELECT learning_notes.id::text,
+			learning_notes.title,
+			knowledge_spaces.name,
+			learning_notes.current_version
+		FROM learning_notes
+		JOIN knowledge_spaces ON knowledge_spaces.id = learning_notes.space_id
+		WHERE learning_notes.trashed_at IS NULL
+			AND learning_notes.published_at IS NULL
+			AND knowledge_spaces.visibility = 'public'
+		ORDER BY knowledge_spaces.name, learning_notes.updated_at DESC, learning_notes.id DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query unpublished Learning Notes in public Knowledge Spaces: %w", err)
+	}
+	defer rows.Close()
+
+	candidates := make([]PublicDraftCandidate, 0)
+	for rows.Next() {
+		var candidate PublicDraftCandidate
+		if err := rows.Scan(&candidate.ID, &candidate.Title, &candidate.SpaceName, &candidate.Version); err != nil {
+			return nil, fmt.Errorf("scan unpublished Learning Note in public Knowledge Space: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate unpublished Learning Notes in public Knowledge Spaces: %w", err)
+	}
+	return candidates, nil
+}
+
 func (repository *PostgresRepository) GetPublishedNote(ctx context.Context, id string) (PublishedNote, error) {
 	note, err := scanPublishedNote(repository.pool.QueryRow(ctx, publishedNoteSelect+`
 		WHERE learning_notes.id = $1

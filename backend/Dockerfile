@@ -7,7 +7,8 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-api ./cmd/api \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-migrate ./cmd/migrate \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-worker ./cmd/worker \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-restore ./cmd/restore
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-restore ./cmd/restore \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/notefoundry-publish-public ./cmd/publishpublic
 
 FROM postgres:17-alpine
 

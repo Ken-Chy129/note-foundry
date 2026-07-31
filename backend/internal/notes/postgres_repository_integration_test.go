@@ -52,6 +52,13 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	if err := repository.CreateNote(ctx, note); err != nil {
 		t.Fatalf("CreateNote() error = %v", err)
 	}
+	publicDrafts, err := repository.ListUnpublishedPublicNotes(ctx, 20)
+	if err != nil {
+		t.Fatalf("ListUnpublishedPublicNotes() error = %v", err)
+	}
+	if len(publicDrafts) != 1 || publicDrafts[0].ID != note.ID() || publicDrafts[0].Version != note.Version() {
+		t.Fatalf("public draft candidates = %+v", publicDrafts)
+	}
 	firstCopy, err := repository.GetNote(ctx, note.ID())
 	if err != nil {
 		t.Fatalf("first GetNote() error = %v", err)
@@ -81,6 +88,13 @@ func TestPostgresRepositoryPersistsDraftPublishAndRevisionLifecycle(t *testing.T
 	}
 	if err := repository.Publish(ctx, firstCopy, revision); err != nil {
 		t.Fatalf("repository.Publish() error = %v", err)
+	}
+	publicDrafts, err = repository.ListUnpublishedPublicNotes(ctx, 20)
+	if err != nil {
+		t.Fatalf("ListUnpublishedPublicNotes(after publish) error = %v", err)
+	}
+	if len(publicDrafts) != 0 {
+		t.Fatalf("public draft candidates after publish = %+v", publicDrafts)
 	}
 
 	published, err := repository.GetNote(ctx, note.ID())

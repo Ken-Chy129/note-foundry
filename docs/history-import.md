@@ -137,4 +137,22 @@ go run ./cmd/historyrecover -bundle /path/to/recovery-bundle -apply
 - 中断后优先支持续传。当前 API 没有删除整个 Knowledge Space 的事务式回滚能力，因此不能假装全量写入是一个原子操作；
 - 导入器只创建 private 草稿，不发布内容，也不改变已有 Knowledge Space 的 visibility。
 
+## 公开历史草稿的发布校正
+
+如果历史迁移完成后，Owner 已经明确把目标 Knowledge Space 改为 public，但其中的既有草稿也应作为首版公开内容发布，必须让每篇 Learning Note 走正常发布流程。不要直接更新 `published_at` 或 `published_markdown`，否则会漏掉 Note Revision、公开搜索、稳定链接和附件可见性投影。
+
+部署镜像提供了一个默认只读的预检命令。它会列出所有位于 public Knowledge Space 且从未发布的 Learning Note：
+
+```bash
+docker compose run --rm api /usr/local/bin/notefoundry-publish-public
+```
+
+确认列表、Knowledge Space 可见性和最近备份无误后，再显式执行：
+
+```bash
+docker compose run --rm api /usr/local/bin/notefoundry-publish-public -confirm
+```
+
+命令逐篇调用正式发布领域流程，并且只选择 `published_at IS NULL` 的笔记，因此成功完成后重复执行不会再次发布已有 Published Content。这个命令是受控迁移校正工具，不会改变后续新建笔记仍需显式发布的产品规则。
+
 在问题报告未审核、缺失附件策略未确认之前，不应把整理包自动写入运行时数据库。
